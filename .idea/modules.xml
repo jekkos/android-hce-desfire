@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/android-hce-desfire.iml" filepath="$PROJECT_DIR$/android-hce-desfire.iml" />
+      <module fileurl="file://$PROJECT_DIR$/hceappletdesfire/hceappletdesfire.iml" filepath="$PROJECT_DIR$/hceappletdesfire/hceappletdesfire.iml" />
+      <module fileurl="file://$PROJECT_DIR$/hceframework/hceframework.iml" filepath="$PROJECT_DIR$/hceframework/hceframework.iml" />
+    </modules>
+  </component>
+</project>

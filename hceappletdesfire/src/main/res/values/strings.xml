@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="app_name">Desfire HCE</string>
+    <string name="action_settings">Settings</string>
+    <string name="clearButtonText">Clear</string>
+    <string name="saveButtonText">Save</string>
+
+</resources>

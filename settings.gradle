@@ -1,0 +1,2 @@
+include ':hceframework'
+include ':hceappletdesfire'

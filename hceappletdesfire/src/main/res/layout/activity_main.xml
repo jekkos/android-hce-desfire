@@ -1,0 +1,44 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity"
+    tools:ignore="MergeRootFrame" style="@style/AppBaseTheme">
+
+    <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:id="@+id/scrollView" android:layout_gravity="center|top" android:longClickable="false"
+            android:background="#ff000000"
+            android:fillViewport="true" android:layout_alignParentLeft="true"
+            android:layout_alignParentStart="false"
+            android:layout_alignParentTop="true" android:layout_alignParentEnd="false"
+            android:layout_above="@+id/linearLayout">
+        <TextView
+            android:id="@+id/apduView"
+            style="@style/AppTheme"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:scrollbars = "vertical"
+            android:autoText="false"
+            android:textColor="@android:color/holo_green_dark"
+            android:textIsSelectable="true" android:layout_gravity="top" android:editable="false"
+            android:gravity="right|top"/>
+    </ScrollView>
+    <LinearLayout
+            android:orientation="horizontal"
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content" android:layout_centerHorizontal="true"
+            android:gravity="center|center_horizontal|bottom" android:weightSum="1"
+            android:layout_alignParentBottom="true" android:id="@+id/linearLayout">
+        <Button
+                android:layout_height="wrap_content"
+                android:text="@string/saveButtonText"
+                android:id="@+id/saveButton" android:layout_gravity="bottom|left"
+                android:layout_weight="0.5" android:layout_width="wrap_content"/>
+        <Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/clearButtonText"
+                android:id="@+id/clearButton" android:layout_gravity="bottom|right"
+                android:layout_weight="0.5"/>
+    </LinearLayout>
+</RelativeLayout>
