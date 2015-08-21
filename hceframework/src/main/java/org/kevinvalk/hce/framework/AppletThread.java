@@ -1,28 +1,31 @@
 package org.kevinvalk.hce.framework;
 
+import java.beans.PropertyChangeListener;
+import java.beans.PropertyChangeSupport;
 import java.io.IOException;
 
 import org.kevinvalk.hce.framework.apdu.Apdu;
 import org.kevinvalk.hce.framework.apdu.CommandApdu;
 import org.kevinvalk.hce.framework.apdu.ResponseApdu;
 
-public class AppletThread implements Runnable 
+public class AppletThread implements Runnable
 {
-	private volatile boolean isRunning = false;
-	Applet applet = null;
-	Apdu firstApdu = null;
-	TagWrapper tag = null;
 
-	public AppletThread()
+	public static final String LAST_APDUS = "apdus";
+	private static final String LAST_ERROR = "lastError";
+
+	private volatile boolean isRunning = false;
+	private Applet applet = null;
+	private Apdu firstApdu = null;
+	private TagWrapper tag = null;
+
+	private PropertyChangeSupport propertyChangeSupport = new PropertyChangeSupport(this);
+	private Apdu[] lastApdus;
+	private Exception lastError;
+
+	public AppletThread(PropertyChangeListener propertyChangeListener)
 	{
-		
-	}
-	
-	public AppletThread(Applet applet, TagWrapper tag, Apdu firstApdu)
-	{
-		this.applet = applet;
-		this.tag = tag;
-		this.firstApdu = firstApdu;
+		this.propertyChangeSupport.addPropertyChangeListener(propertyChangeListener);
 	}
 	
 	public synchronized void stop()
@@ -71,21 +74,26 @@ public class AppletThread implements Runnable
 		{
 			try
 			{
+				ResponseApdu responseApdu = null;
 				try
 				{
 					// Let the applet handle the APDU
-					ResponseApdu response = applet.process(new CommandApdu(apdu));
-					
+					responseApdu = applet.process(new CommandApdu(apdu));
+
 					// If we have a response send it, else just wait
-					if (response != null)
-						apdu = sendApdu(tag, response);
-					else
+					if (responseApdu != null) {
+						apdu = sendApdu(tag, responseApdu);
+					} else {
 						apdu = getApdu(tag);
+					}
+
 				}
 				catch(IsoException iso)
 				{
 					// We got an soft error so send response to our terminal
-					apdu = sendApdu(tag, new ResponseApdu(iso.getErrorCode()));
+					responseApdu = new ResponseApdu(iso.getErrorCode());
+					apdu = sendApdu(tag, responseApdu);
+
 				}
 			}
 			catch(Exception e)
@@ -99,7 +107,15 @@ public class AppletThread implements Runnable
 		
 		Util.d("THREAD", "Gracefull stop");
 	}
-	
+
+	private void publishException(Exception lastError) {
+		propertyChangeSupport.firePropertyChange(LAST_ERROR, this.lastError, this.lastError = lastError);
+	}
+
+	private void publishApdu(Apdu... lastApdus) {
+		propertyChangeSupport.firePropertyChange(LAST_APDUS, this.lastApdus, this.lastApdus = lastApdus);
+	}
+
 	/**
 	 * Sends an APDU to the terminal and waits for the next one
 	 * 
@@ -107,13 +123,16 @@ public class AppletThread implements Runnable
 	 * @param Apdu The APDU to send
 	 * @return Apdu response
 	 */
-	public static Apdu sendApdu(TagWrapper tag, Apdu apdu) throws IOException
+	public Apdu sendApdu(TagWrapper tag, ResponseApdu responseApdu) throws IOException
 	{	
-		if(apdu != null)
-			Util.d("NFC", "Send apdu: %s", Util.toHex(apdu.getBuffer()));
-		byte [] response = tag.transceive((apdu == null ? new byte[0] : apdu.getBuffer()));
-		Util.d("NFC", "Recv apdu: %s", Util.toHex(response));
-		return new Apdu(response);
+		if(responseApdu != null) {
+			Util.d("HceFramework", "<- %s", Util.toHex(responseApdu.getBuffer()));
+		}
+		byte [] response = tag.transceive((responseApdu == null ? new byte[0] : responseApdu.getBuffer()));
+		Util.d("HceFramework", "-> %s", Util.toHex(response));
+		Apdu commandApdu = new Apdu(response);
+		publishApdu(commandApdu, responseApdu);
+		return commandApdu;
 	}
 	
 	/**
@@ -122,7 +141,7 @@ public class AppletThread implements Runnable
 	 * @param tag
 	 * @return Apdu response
 	 */
-	public static Apdu getApdu(TagWrapper tag) throws IOException
+	public Apdu getApdu(TagWrapper tag) throws IOException
 	{
 		return sendApdu(tag, null);
 	}

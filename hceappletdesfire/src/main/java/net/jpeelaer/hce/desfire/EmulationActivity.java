@@ -1,31 +1,29 @@
 package net.jpeelaer.hce.desfire;
 
 
+import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Color;
 import android.nfc.NfcAdapter;
 import android.nfc.Tag;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.PowerManager;
+import android.os.*;
 import android.os.PowerManager.WakeLock;
-import android.support.v4.app.FragmentActivity;
-import android.text.method.ScrollingMovementMethod;
+import android.text.Spannable;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
-import android.view.Menu;
 import android.view.Window;
 import android.widget.TextView;
 import org.kevinvalk.hce.R;
 import org.kevinvalk.hce.framework.HceFramework;
 import org.kevinvalk.hce.framework.TagWrapper;
+import org.kevinvalk.hce.framework.apdu.Apdu;
 
 import javax.crypto.NoSuchPaddingException;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
@@ -33,7 +31,18 @@ import java.security.spec.InvalidKeySpecException;
 import java.util.Arrays;
 import java.util.List;
 
-public class EmulationActivity extends FragmentActivity {
+public class EmulationActivity extends Activity {
+
+    //private static final String TECH_ISO_A = "android.nfc.tech.NfcA";
+
+    private static final String TAG = "DesfireHCE";
+
+    public static final String TECH_ISO_PCDA = "android.nfc.tech.IsoPcdA";
+    /**
+     * The serialization (saved instance state) Bundle key representing the
+     * current dropdown position.
+     */
+    private static final String STATE_SELECTED_NAVIGATION_ITEM = "selected_navigation_item";
 
 	// NFC HCE
 	private DesfireApplet desfireApplet = null;
@@ -46,17 +55,17 @@ public class EmulationActivity extends FragmentActivity {
     private String[][] techLists;
     private WakeLock wakeLock;
     private PowerManager powerManager;
-	public static final String TECH_ISO_PCDA = "android.nfc.tech.IsoPcdA";
-	//private static final String TECH_ISO_A = "android.nfc.tech.NfcA";
-	
-	private static final String TAG = "HCE";
-	/**
-	 * The serialization (saved instance state) Bundle key representing the
-	 * current dropdown position.
-	 */
-	private static final String STATE_SELECTED_NAVIGATION_ITEM = "selected_navigation_item";
-	
-	private void initFramework() throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, 
+
+    private final PropertyChangeListener APDU_LISTENER = new PropertyChangeListener() {
+
+        @Override
+        public void propertyChange(PropertyChangeEvent event) {
+            publishApdu((Apdu[]) event.getNewValue(), event.getPropertyName());
+        }
+
+    };
+
+    private void initFramework() throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException,
 		NoSuchPaddingException, InvalidKeySpecException
 	{
 		if (desfireApplet == null) {
@@ -64,12 +73,41 @@ public class EmulationActivity extends FragmentActivity {
 		}
 		
 		// Enable NFC HCE and register our appletsAF
-		if (framework == null)
-			framework = new HceFramework();
+		if (framework == null) {
+			framework = new HceFramework(APDU_LISTENER);
+        }
 		framework.register(desfireApplet);
 	}
 
-	@Override
+    private  void publishApdu(final Apdu[] apdus, final String apduType) {
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+
+            @Override
+            public void run() {
+                TextView tv = (TextView) findViewById(R.id.apduView);
+                for (Apdu apdu : apdus) {
+                    String s = String.valueOf(apdu.getBuffer());
+                    boolean isCommandApdu = Apdu.COMMAND_APDU.equals(apduType);
+                    String prefix = isCommandApdu ? "->" : "<-";
+                    String fulltext = prefix + " " + s + "\r\n";
+                    // TODO return ok here?,
+                    // TODO subtext ok here??
+                    drawColoredText(tv, fulltext, fulltext, isCommandApdu ? Color.MAGENTA : Color.GREEN);
+                }
+
+            }
+        });
+    }
+
+    private void drawColoredText(TextView view, String fulltext, String subtext, int color) {
+        view.setText(fulltext, TextView.BufferType.SPANNABLE);
+        Spannable str = (Spannable) view.getText();
+        int i = fulltext.indexOf(subtext);
+        str.setSpan(new ForegroundColorSpan(color), i, i + subtext.length(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    @Override
 	protected void onCreate(Bundle savedInstanceState)
 	{
 		requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
@@ -79,8 +117,6 @@ public class EmulationActivity extends FragmentActivity {
         // Get power management
         powerManager = (PowerManager) getSystemService(Context.POWER_SERVICE);
         
-		// Set up the action bar to show a dropdown list.
-		startTextViewLog();
         // Fix adapter settings
         adapter = NfcAdapter.getDefaultAdapter(this);
         adapter.setNdefPushMessage(null, this);
@@ -106,28 +142,6 @@ public class EmulationActivity extends FragmentActivity {
         }
 	}
 
-	private void startTextViewLog() {
-	    final Handler handler = new Handler();
-		  // Do something long
-	    Runnable runnable = new Runnable() {
-	        @Override
-	        public void run() {
-	            //do long stuff (like getting info for intent)
-	            handler.post(new Runnable() {
-	            @Override
-	            public void run() {
-	            	//start new actiity with intent you just made
-	            	//Do something that takes a while
-	            		TextView tv = (TextView)findViewById(R.id.apduView);
-	            		tv.setMovementMethod(new ScrollingMovementMethod());
-						// TODO update apduView here with command/response buffer (apdu's will be saved as enum?)
-	            }
-	        });
-	        }
-	    };
-	    new Thread(runnable).start();
-	}
-	
     @Override
     public void onNewIntent(Intent intent)
     {
@@ -178,19 +192,22 @@ public class EmulationActivity extends FragmentActivity {
 		wakeLock = powerManager.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, getString(R.string.app_name));
         wakeLock.acquire();
         
-		if (adapter != null)
-			adapter.enableForegroundDispatch(this, pendingIntent, filters, techLists);
+		if (adapter != null) {
+            adapter.enableForegroundDispatch(this, pendingIntent, filters, techLists);
+        }
 	}
     
     @Override
     public void onPause()
 	{
 		super.onPause();
-		if (adapter != null)
-			adapter.disableForegroundDispatch(this);
-		
-        if (wakeLock != null)
+		if (adapter != null) {
+            adapter.disableForegroundDispatch(this);
+        }
+
+        if (wakeLock != null) {
             wakeLock.release();
+        }
 	}
     
 }

@@ -33,7 +33,7 @@ public class CommandApdu extends Apdu
 	private int lc;
 	private int le;
 	private byte[] cdata = null;
-	
+
 	public CommandApdu(byte[] buffer, int length)
 	{
 		this(Arrays.copyOf(buffer, length));
@@ -43,6 +43,8 @@ public class CommandApdu extends Apdu
 	{
 		this(new Apdu(buffer));
 	}
+
+
 	
 	public CommandApdu(Apdu apdu)
 	{

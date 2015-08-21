@@ -2,50 +2,8 @@ package net.jpeelaer.hce.desfire;
 
 
 public class Util {
-	//COMMAND CODES
-	public final static byte AUTHENTICATE= (byte) 0x0A;//
-	public final static byte AUTHENTICATE_ISO=(byte)0x1A;
-	public final static byte AUTHENTICATE_AES=(byte)0xAA;
-	public final static byte CHANGE_KEY_SETTINGS=(byte)0x54;//
-	public final static byte SET_CONFIGURATION = (byte) 0x5C;
-	public final static byte CHANGE_KEY= (byte) 0xC4;//
-	public final static byte GET_KEY_VERSION= (byte)0x64; 
-	public final static byte CREATE_APPLICATION = (byte) 0xCA;//
-	public final static byte DELETE_APPLICATION = (byte) 0xDA;//
-	public final static byte GET_APPLICATION_IDS= (byte)0x6A;//
-	public final static byte FREE_MEMORY=(byte)0x6E;
-	public final static byte GET_DF_NAMES=(byte)0x6D;
-	public final static byte GET_KEY_SETTINGS=(byte)0x45;
-	public final static byte SELECT_APPLICATION = (byte) 0x5A;//
-	public final static byte FORMAT_PICC=(byte) 0xFC;
-	public final static byte GET_VERSION=(byte)0x60;
-	public final static byte GET_CARD_UID=(byte)0x51;	
-	public final static byte GET_FILE_IDS = (byte) 0x6F;//
-	public final static byte GET_FILE_SETTINGS=(byte)0xF5;
-	public final static byte CHANGE_FILE_SETTINGS=(byte)0x5F;
-	public final static byte CREATE_STDDATAFILE = (byte) 0xCD;//
-	public final static byte CREATE_BACKUPDATAFILE = (byte) 0xCB;//
-	public final static byte CREATE_VALUE_FILE=(byte) 0xCC;//
-	public final static byte CREATE_LINEAR_RECORD_FILE=(byte)0xC1;//
-	public final static byte CREATE_CYCLIC_RECORD_FILE=(byte)0xC0;//
-	public final static byte DELETE_FILE=(byte)0xDF;//
-	public final static byte GET_ISO_FILE_IDS=(byte)0x61;
-	public final static byte READ_DATA = (byte) 0x8D;//
-	public final static byte WRITE_DATA = (byte) 0x3D;//
-	public final static byte GET_VALUE=(byte)0x6C;//
-	public final static byte CREDIT=(byte)0x0C;//
-	public final static byte DEBIT=(byte)0xDC;//
-	public final static byte LIMITED_CREDIT=(byte)0x1C;
-	public final static byte WRITE_RECORD=(byte)0x3B;//
-	public final static byte READ_RECORDS=(byte)0xBB;//
-	public final static byte CLEAR_RECORD_FILE=(byte)0xEB;//
-	public final static byte COMMIT_TRANSACTION=(byte)0xC7;//
-	public final static byte ABORT_TRANSACTION=(byte)0xA7;//
-	public final static byte CONTINUE = (byte) 0xAF;
-	
-	//CommandToContinue
-	public final static byte NO_COMMAND_TO_CONTINUE = 0;
-	
+
+
 	//Authenticated
 	public final static byte NO_KEY_AUTHENTICATED=-1;
 	

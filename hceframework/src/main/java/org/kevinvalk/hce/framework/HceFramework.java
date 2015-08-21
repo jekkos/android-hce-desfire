@@ -1,5 +1,6 @@
 package org.kevinvalk.hce.framework;
 
+import java.beans.PropertyChangeListener;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,15 +11,20 @@ import org.kevinvalk.hce.framework.apdu.ResponseApdu;
 
 public class HceFramework
 {
+
 	private Map<ByteBuffer, Applet> applets_;
 	private Applet activeApplet_;
 	private volatile AppletThread appletThread_;
-	
-	public HceFramework()
-	{
-		applets_ = new HashMap<ByteBuffer, Applet>();
+
+	public HceFramework() {
 		activeApplet_ = null;
-		appletThread_ = new AppletThread();
+		applets_ = new HashMap<ByteBuffer, Applet>();
+	}
+
+	public HceFramework(PropertyChangeListener propertyChangeListener)
+	{
+		this();
+		appletThread_ = new AppletThread(propertyChangeListener);
 	}
 	
 	/**
@@ -34,7 +40,7 @@ public class HceFramework
 			return true;
 		return (applets_.put(ByteBuffer.wrap(applet.getAid()), applet) == null);
 	}
-	
+
 	/**
 	 * Handles a new terminal
 	 * 
@@ -46,7 +52,7 @@ public class HceFramework
 		try
 		{
 			// Get the first APDU from the tag
-			Apdu apdu = AppletThread.getApdu(tag); 
+			Apdu apdu = appletThread_.getApdu(tag);
 
 			// Keep trying
 			do
@@ -69,11 +75,11 @@ public class HceFramework
 						activeApplet_.select();
 						
 						// Send an OK and start the applet
-						Apdu response = AppletThread.sendApdu(tag, new ResponseApdu(Iso7816.SW_NO_ERROR));
+						Apdu response = appletThread_.sendApdu(tag, new ResponseApdu(Iso7816.SW_NO_ERROR));
 						
 						// Stop current applet thread and wait just a bit
 						appletThread_.stop();
-						Thread.sleep(250);
+						Thread.sleep(100);
 						
 						// Set the applet to the active runnable
 						appletThread_.setApplet(activeApplet_, tag);
@@ -90,17 +96,18 @@ public class HceFramework
 					else
 					{
 						// Something went wrong
-						apdu = AppletThread.sendApdu(tag, new ResponseApdu(Iso7816.SW_APPLET_SELECT_FAILED));
+						apdu = appletThread_.sendApdu(tag, new ResponseApdu(Iso7816.SW_APPLET_SELECT_FAILED));
 						continue;
 					}
 				}
 				
 				// This is as defined in the specifications
 				// If we have an active applet let them process this commandApdu
-				if (activeApplet_ != null)
-					apdu = AppletThread.sendApdu(tag, activeApplet_.process(commandApdu));
-				else
-					apdu = AppletThread.sendApdu(tag, new ResponseApdu(Iso7816.SW_INS_NOT_SUPPORTED));
+				if (activeApplet_ != null) {
+					apdu = appletThread_.sendApdu(tag, activeApplet_.process(commandApdu));
+				} else {
+					apdu = appletThread_.sendApdu(tag, new ResponseApdu(Iso7816.SW_INS_NOT_SUPPORTED));
+				}
 			}
 			while(true);
 		}

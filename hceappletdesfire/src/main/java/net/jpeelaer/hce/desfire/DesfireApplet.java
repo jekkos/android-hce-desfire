@@ -1,23 +1,21 @@
 package net.jpeelaer.hce.desfire;
 
+import java.beans.PropertyChangeSupport;
 import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import javax.crypto.*;
-import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.kevinvalk.hce.framework.Applet;
 import org.kevinvalk.hce.framework.Iso7816;
 import org.kevinvalk.hce.framework.IsoException;
-import org.kevinvalk.hce.framework.apdu.Apdu;
-import org.kevinvalk.hce.framework.apdu.CommandApdu;
-import org.kevinvalk.hce.framework.apdu.ResponseApdu;
-import org.kevinvalk.hce.framework.apdu.SecureApdu;
+import org.kevinvalk.hce.framework.apdu.*;
 import org.spongycastle.util.Arrays;
 
 import android.util.Log;
@@ -38,9 +36,13 @@ public class DesfireApplet extends Applet {
 
     private static final String APPLET_NAME = "desfire-hce";
 
+    private static final String LOG_TAG = "DesfireHce";
+
     // similar as AES_encrypt in openssl/aes.h?
     final Cipher AES_CIPHER = Cipher.getInstance("AES/CBC/PKCS5Padding");
     final Cipher DES_CIPHER = Cipher.getInstance("DES/ECB/NoPadding");
+
+    private ConcurrentLinkedQueue<Apdu> apdus = new ConcurrentLinkedQueue<Apdu>();
     /**
      * Master file of the card
      */
@@ -69,7 +71,7 @@ public class DesfireApplet extends Applet {
     /**
      * Sets wich command has to continue after a CONTINUE command
      */
-    private byte commandToContinue;//para comandos que necesitan continuar
+    private DesFireInstruction commandToContinue;//para comandos que necesitan continuar
     /**
      * Used in R/W operations to keep the number of bytes processed so far
      */
@@ -93,6 +95,7 @@ public class DesfireApplet extends Applet {
     private byte authenticated;
     private byte[] dataBuffer;
 
+
     /**
      * private constructor - called by the install method to instantiate a
      * EidCard instance
@@ -108,7 +111,7 @@ public class DesfireApplet extends Applet {
     public DesfireApplet() throws NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException, InvalidKeySpecException {
         masterFile = new MasterFile();
         selectedDF = masterFile;
-        commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+        commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
         offset = 0;
         bytesLeft = 0;
         keyNumberToAuthenticate = 0;
@@ -133,7 +136,7 @@ public class DesfireApplet extends Applet {
     private ResponseApdu authenticate(Apdu Apdu, byte[] buffer) throws ShortBufferException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException, InvalidKeySpecException, NoSuchAlgorithmException {
         //Apdu: KeyNo
 
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             //FIRST MESSAGE
 
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != 1) IsoException.throwIt(Util.LENGTH_ERROR);
@@ -148,14 +151,14 @@ public class DesfireApplet extends Applet {
 
             Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE);
             cipher.doFinal(randomNumberToAuthenticate, (short) 0, (short) 8, ekRndB, (short) 0);
-            commandToContinue = Util.AUTHENTICATE;
+            commandToContinue = DesFireInstruction.AUTHENTICATE;
 
             //Ek(RndB) is sent
             return sendResponse(Apdu, buffer, ekRndB, (byte) 0xAF);
         } else {
             //SECCOND MESSAGE 
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != 16) IsoException.throwIt(Util.LENGTH_ERROR);
-            commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+            commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
             byte[] encryptedRndA = new byte[8];
             byte[] encryptedRndArndB = new byte[16];
             byte[] rndA = new byte[8];
@@ -333,7 +336,7 @@ public class DesfireApplet extends Applet {
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
         byte[] response;
         byte numApp = (byte) (masterFile.numApp - 1);//-1 because the IndexFile won't be included
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             if (masterFile.hasGetRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
             if (numApp == 0) IsoException.throwIt(Util.OPERATION_OK);
 //			if(numApp==1){
@@ -342,7 +345,7 @@ public class DesfireApplet extends Applet {
 //			}
             if (numApp > 19) {
                 response = new byte[(byte) 19 * 3];
-                commandToContinue = Util.GET_APPLICATION_IDS;
+                commandToContinue = DesFireInstruction.GET_APPLICATION_IDS;
             } else response = new byte[(byte) (numApp * 3)];
             for (byte i = 0; i < response.length; i = (byte) (i + 3)) {
                 byte[] AID = masterFile.getAID((byte) (i / 3 + 1));//+1 because the IndexFile won't be included
@@ -354,7 +357,7 @@ public class DesfireApplet extends Applet {
             //Habr�a que devolver STATUS WORD AF si hay m�s AID q enviar
             return sendResponse(Apdu, buffer, response);
         } else {//Second part
-            commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+            commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
             response = new byte[(byte) ((numApp - 19) * 3)];
             for (byte i = 0; i < response.length; i = (byte) (i + 3)) {
                 byte[] AID = masterFile.getAID((byte) (i / 3 + 21));//21 beacuase the IndexFile won't be included
@@ -774,7 +777,7 @@ public class DesfireApplet extends Applet {
     private ResponseApdu readData(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
-        if (((byte) buffer[Iso7816.OFFSET_INS] == Util.READ_DATA) && ((byte) buffer[Iso7816.OFFSET_LC] != 7))
+        if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.READ_DATA.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] != 7))
             IsoException.throwIt(Util.LENGTH_ERROR);
         //Get parameters
         byte fileID = buffer[Iso7816.OFFSET_CDATA];
@@ -788,7 +791,7 @@ public class DesfireApplet extends Applet {
 
         //Read data
         dataBuffer = ((StandartFile) selectedFile).readArray(offset, bytesLeft, (short) 0);
-        commandToContinue = Util.READ_DATA;
+        commandToContinue = DesFireInstruction.READ_DATA;
 
         return sendBlockResponse(Apdu, buffer, dataBuffer, (short) 0, selectedFile.getCommunicationSettings());
 
@@ -863,12 +866,12 @@ public class DesfireApplet extends Applet {
     private void writeData(Apdu Apdu, byte[] buffer) {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
-        if (((byte) buffer[Iso7816.OFFSET_INS] == Util.WRITE_DATA) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
+        if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.WRITE_DATA.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
             IsoException.throwIt(Util.LENGTH_ERROR);
-        if (((byte) buffer[Iso7816.OFFSET_INS] == Util.CONTINUE) && ((byte) buffer[Iso7816.OFFSET_LC] != 0))
+        if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.CONTINUE.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] != 0))
             IsoException.throwIt(Util.LENGTH_ERROR);
         byte readed;
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             //Get parameters
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
             if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
@@ -890,10 +893,10 @@ public class DesfireApplet extends Applet {
             dataBuffer = Util.concatByteArray(dataBuffer, Util.subByteArray(buffer, Iso7816.OFFSET_CDATA, (short) (Iso7816.OFFSET_CDATA + readed)));
         }
         if (bytesLeft > 0) {//If there are still more bytes to receive we inform we are waiting for them
-            commandToContinue = Util.WRITE_DATA;
-            IsoException.throwIt(Util.CONTINUE);
+            commandToContinue = DesFireInstruction.WRITE_DATA;
+            IsoException.throwIt(DesFireInstruction.CONTINUE.toByte());
         } else { //if this was the last message we reset the variables and inform the file
-            commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+            commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
             offset = 0;
             bytesLeft = 0;
 
@@ -907,19 +910,19 @@ public class DesfireApplet extends Applet {
     private ResponseApdu getVersion(CommandApdu Apdu, byte[] buffer) {
         byte[] response;
         short statusBytes = Util.OPERATION_OK;
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             response = ResponseApdus.VERSION_1;
             offset = (short) response.length;
-            commandToContinue = Util.GET_VERSION;
+            commandToContinue = DesFireInstruction.GET_VERSION;
             statusBytes = Util.ADDITIONAL_FRAME;
         } else if (offset == ResponseApdus.VERSION_1.length) {
             response = ResponseApdus.VERSION_2;
             offset = (short) (ResponseApdus.VERSION_1.length + ResponseApdus.VERSION_2.length);
-            commandToContinue = Util.GET_VERSION;
+            commandToContinue = DesFireInstruction.GET_VERSION;
             statusBytes = Util.ADDITIONAL_FRAME;
         } else {
             response = ResponseApdus.VERSION_3;
-            commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+            commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
             offset = 0;
         }
         return sendResponse(Apdu, buffer, response, statusBytes);
@@ -1003,12 +1006,12 @@ public class DesfireApplet extends Applet {
     private void writeRecord(Apdu Apdu, byte[] buffer) {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
-        if (((byte) buffer[Iso7816.OFFSET_INS] == Util.WRITE_RECORD) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
+        if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.WRITE_RECORD.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
             IsoException.throwIt(Util.LENGTH_ERROR);
-        if (((byte) buffer[Iso7816.OFFSET_INS] == Util.CONTINUE) && ((byte) buffer[Iso7816.OFFSET_LC] != 0))
+        if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.CONTINUE.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] != 0))
             IsoException.throwIt(Util.LENGTH_ERROR);
 
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
 
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
             selectedFile = selectedDF.getFile(fileID);
@@ -1041,8 +1044,8 @@ public class DesfireApplet extends Applet {
             } else {
                 readed = 52;
                 bytesLeft = (short) (bytesLeft - 52);
-                commandToContinue = Util.WRITE_RECORD;
-                IsoException.throwIt(Util.CONTINUE);
+                commandToContinue = DesFireInstruction.WRITE_RECORD;
+                IsoException.throwIt(DesFireInstruction.CONTINUE.toByte());
             }
         } else {//commandToContinue==Util.WRITE_RECORD
             byte length = (byte) (buffer[Iso7816.OFFSET_LC]);
@@ -1059,8 +1062,8 @@ public class DesfireApplet extends Applet {
             } else {
                 readed = (short) (readed + 59);
                 bytesLeft = (short) (bytesLeft - 59);
-                commandToContinue = Util.WRITE_RECORD;
-                IsoException.throwIt(Util.CONTINUE);
+                commandToContinue = DesFireInstruction.WRITE_RECORD;
+                IsoException.throwIt(DesFireInstruction.CONTINUE.toByte());
             }
         }
         return;
@@ -1089,7 +1092,7 @@ public class DesfireApplet extends Applet {
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 7) IsoException.throwIt(Util.LENGTH_ERROR);
         byte[] out = null;
-        if (commandToContinue == Util.NO_COMMAND_TO_CONTINUE) {
+        if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
             if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
             selectedFile = selectedDF.getFile(fileID);
@@ -1109,10 +1112,10 @@ public class DesfireApplet extends Applet {
                     return sendResponse(Apdu, buffer, out, Util.OPERATION_OK, selectedFile.getCommunicationSettings());
                 } else {
                     out = ((LinearRecord) selectedFile).readData(offset, (byte) 59, (byte) 0);
-                    commandToContinue = Util.READ_RECORDS;
+                    commandToContinue = DesFireInstruction.READ_RECORDS;
                     offset = (short) (offset + 59);
                     bytesLeft = (short) (bytesLeft - 59);
-                    return sendResponse(Apdu, buffer, out, Util.CONTINUE, selectedFile.getCommunicationSettings());
+                    return sendResponse(Apdu, buffer, out, DesFireInstruction.CONTINUE.toByte(), selectedFile.getCommunicationSettings());
                 }
             }
             if (selectedFile instanceof CyclicRecord) {
@@ -1130,10 +1133,10 @@ public class DesfireApplet extends Applet {
                     return sendResponse(Apdu, buffer, out, Util.OPERATION_OK, selectedFile.getCommunicationSettings());
                 } else {
                     out = ((CyclicRecord) selectedFile).readData(offset, (byte) 59, (byte) 0);
-                    commandToContinue = Util.READ_RECORDS;
+                    commandToContinue = DesFireInstruction.READ_RECORDS;
                     offset = (short) (offset + 59);
                     bytesLeft = (short) (bytesLeft - 59);
-                    return sendResponse(Apdu, buffer, out, Util.CONTINUE, selectedFile.getCommunicationSettings());
+                    return sendResponse(Apdu, buffer, out, DesFireInstruction.CONTINUE.toByte(), selectedFile.getCommunicationSettings());
                 }
 
             }
@@ -1144,14 +1147,14 @@ public class DesfireApplet extends Applet {
                     out = ((LinearRecord) selectedFile).readData(offset, bytesLeft, (byte) 0);
                     offset = 0;
                     bytesLeft = 0;
-                    commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+                    commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
                     return sendResponse(Apdu, buffer, out, Util.OPERATION_OK, selectedFile.getCommunicationSettings());
                 } else {
                     out = ((LinearRecord) selectedFile).readData(offset, (byte) 59, (byte) 0);
-                    commandToContinue = Util.READ_RECORDS;
+                    commandToContinue = DesFireInstruction.READ_RECORDS;
                     offset = (short) (offset + 59);
                     bytesLeft = (short) (bytesLeft - 59);
-                    return sendResponse(Apdu, buffer, out, Util.CONTINUE, selectedFile.getCommunicationSettings());
+                    return sendResponse(Apdu, buffer, out, DesFireInstruction.CONTINUE.toByte(), selectedFile.getCommunicationSettings());
                 }
             }
             if (selectedFile instanceof CyclicRecord) {
@@ -1159,14 +1162,14 @@ public class DesfireApplet extends Applet {
                     out = ((CyclicRecord) selectedFile).readData(offset, bytesLeft, (byte) 0);
                     offset = 0;
                     bytesLeft = 0;
-                    commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+                    commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
                     return sendResponse(Apdu, buffer, out, (byte) 0x00, selectedFile.getCommunicationSettings());
                 } else {
                     out = ((CyclicRecord) selectedFile).readData(offset, (byte) 59, (byte) 0);
-                    commandToContinue = Util.READ_RECORDS;
+                    commandToContinue = DesFireInstruction.READ_RECORDS;
                     offset = (short) (offset + 59);
                     bytesLeft = (short) (bytesLeft - 59);
-                    return sendResponse(Apdu, buffer, out, Util.CONTINUE);
+                    return sendResponse(Apdu, buffer, out, DesFireInstruction.CONTINUE.toByte());
                 }
             }
         }
@@ -1433,7 +1436,6 @@ public class DesfireApplet extends Applet {
         return new ResponseApdu(response, response.length, status);
     }
 
-
     /**
      * This is needed for the authentication because the last message should be sended
      * encrypted with the old session key and afterwards the session key should change
@@ -1498,7 +1500,7 @@ public class DesfireApplet extends Applet {
     private void clear() {
         selectedFile = null;
         selectedDF = masterFile;
-        commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+        commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
         authenticated = Util.NO_KEY_AUTHENTICATED;
         dataBuffer = null;
         securityLevel = Util.PLAIN_COMMUNICATION;
@@ -1602,11 +1604,11 @@ public class DesfireApplet extends Applet {
     private ResponseApdu sendBlockResponse(Apdu Apdu, byte[] buffer, byte[] data, short offset, byte securityLevel) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
         if ((short) (offset + Util.MAX_DATA_SIZE) < data.length) {
             this.offset = (short) (offset + Util.MAX_DATA_SIZE);
-            return sendResponse(Apdu, buffer, Util.subByteArray(data, offset, (short) (offset + Util.MAX_DATA_SIZE - 1)), Util.CONTINUE, securityLevel);
+            return sendResponse(Apdu, buffer, Util.subByteArray(data, offset, (short) (offset + Util.MAX_DATA_SIZE - 1)), DesFireInstruction.CONTINUE.toByte(), securityLevel);
         } else {
 //			IsoException.throwIt((short)securityLevel);
             halfClear();
-            return sendResponse(Apdu, buffer, Util.subByteArray(data, offset, (short) (data.length - 1)), Util.CONTINUE, securityLevel);
+            return sendResponse(Apdu, buffer, Util.subByteArray(data, offset, (short) (data.length - 1)), DesFireInstruction.CONTINUE.toByte(), securityLevel);
         }
 
     }
@@ -1615,7 +1617,7 @@ public class DesfireApplet extends Applet {
      * Reset the variables involved in a multiple-part execution
      */
     private void halfClear() {
-        commandToContinue = Util.NO_COMMAND_TO_CONTINUE;
+        commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
         dataBuffer = null;
         readed = 0;
         offset = 0;
@@ -1631,7 +1633,7 @@ public class DesfireApplet extends Applet {
 //		byte[] buffer = Apdu.getBuffer();
 
         if (authenticated == -1) this.securityLevel = Util.PLAIN_COMMUNICATION;
-        if ((commandToContinue != Util.NO_COMMAND_TO_CONTINUE) && (apdu.getBuffer()[Iso7816.OFFSET_INS] != (byte) 0xAF)) {
+        if ((commandToContinue != DesFireInstruction.NO_COMMAND_TO_CONTINUE) && (apdu.getBuffer()[Iso7816.OFFSET_INS] != (byte) 0xAF)) {
             clear();
             IsoException.throwIt((short) Util.COMMAND_ABORTED);
         }
@@ -1644,102 +1646,104 @@ public class DesfireApplet extends Applet {
         try {
             // check the INS byte to decide which service method to call
             //switch (buffer[Iso7816.OFFSET_INS]) {
-            switch (apdu.ins) {
-                case Util.GET_VERSION:
+            DesFireInstruction instruction = DesFireInstruction.parseInstruction(apdu.ins);
+            // push instruction to stack. apdu as well.C
+            switch (instruction) {
+                case GET_VERSION:
                     return getVersion(apdu, apdu.getBuffer());
-                case Util.AUTHENTICATE:
+                case AUTHENTICATE:
                     return authenticate(apdu, apdu.getBuffer());
-                case Util.AUTHENTICATE_AES:
+                case AUTHENTICATE_AES:
                     return authenticate(apdu, apdu.getBuffer());
-                case Util.CHANGE_KEY_SETTINGS:
+                case CHANGE_KEY_SETTINGS:
                     changeKeySettings(apdu, apdu.getBuffer());
                     break;
-                case Util.CHANGE_KEY:
+                case CHANGE_KEY:
                     changeKey(apdu, apdu.getBuffer());
                     break;
-                case Util.CREATE_APPLICATION:
+                case CREATE_APPLICATION:
                     createApplication(apdu, apdu.getBuffer());
                     break;
-                case Util.DELETE_APPLICATION:
+                case DELETE_APPLICATION:
                     deleteApplication(apdu, apdu.getBuffer());
                     break;
-                case Util.GET_APPLICATION_IDS:
+                case GET_APPLICATION_IDS:
                     return getApplicationIDs(apdu, apdu.getBuffer());
-                case Util.GET_KEY_SETTINGS:
+                case GET_KEY_SETTINGS:
                     return getKeySettings(apdu, apdu.getBuffer());
-                case Util.SELECT_APPLICATION:
+                case SELECT_APPLICATION:
                     selectApplication(apdu, apdu.getBuffer());
                     break;
-                case Util.FORMAT_PICC:
+                case FORMAT_PICC:
                     formatPICC(apdu, apdu.getBuffer());
                     break;
-                case Util.SET_CONFIGURATION:
+                case SET_CONFIGURATION:
                     setConfiguration(apdu, apdu.getBuffer());
                     break;
-                case Util.GET_FILE_IDS:
+                case GET_FILE_IDS:
                     return getFileIDs(apdu, apdu.getBuffer());
-                case Util.CREATE_STDDATAFILE:
+                case CREATE_STDDATAFILE:
                     createStdDataFile(apdu, apdu.getBuffer());
                     break;
-                case Util.CREATE_BACKUPDATAFILE:
+                case CREATE_BACKUPDATAFILE:
                     createBackupDataFile(apdu, apdu.getBuffer());
                     break;
-                case Util.CREATE_VALUE_FILE:
+                case CREATE_VALUE_FILE:
                     createValueFile(apdu, apdu.getBuffer());
                     break;
-                case Util.CREATE_LINEAR_RECORD_FILE:
+                case CREATE_LINEAR_RECORD_FILE:
                     createLinearRecordFile(apdu, apdu.getBuffer());
                     break;
-                case Util.CREATE_CYCLIC_RECORD_FILE:
+                case CREATE_CYCLIC_RECORD_FILE:
                     createCyclicRecordFile(apdu, apdu.getBuffer());
                     break;
-                case Util.DELETE_FILE:
+                case DELETE_FILE:
                     deleteFile(apdu, apdu.getBuffer());
                     break;
-                case Util.READ_DATA:
+                case READ_DATA:
                     return readData(apdu, apdu.getBuffer());
-                case Util.WRITE_DATA:
+                case WRITE_DATA:
                     writeData(apdu, apdu.getBuffer());
                     break;
-                case Util.GET_VALUE:
+                case GET_VALUE:
                     return getValue(apdu, apdu.getBuffer());
-                case Util.CREDIT:
+                case CREDIT:
                     credit(apdu, apdu.getBuffer());
                     break;
-                case Util.DEBIT:
+                case DEBIT:
                     debit(apdu, apdu.getBuffer());
                     break;
-                case Util.READ_RECORDS:
+                case READ_RECORDS:
                     return readRecords(apdu, apdu.getBuffer());
-                case Util.WRITE_RECORD:
+                case WRITE_RECORD:
                     writeRecord(apdu, apdu.getBuffer());
                     break;
-                case Util.CLEAR_RECORD_FILE:
+                case CLEAR_RECORD_FILE:
                     clearRecordFile(apdu, apdu.getBuffer());
                     break;
-                case Util.COMMIT_TRANSACTION:
+                case COMMIT_TRANSACTION:
                     commitTransaction(apdu, apdu.getBuffer());
                     break;
-                case Util.ABORT_TRANSACTION:
+                case ABORT_TRANSACTION:
                     abortTransaction(apdu, apdu.getBuffer());
                     break;
-                case Util.CONTINUE:
+                case CONTINUE:
                     switch (commandToContinue) {
-                        case Util.AUTHENTICATE:
+                        case AUTHENTICATE:
                             return authenticate(apdu, apdu.getBuffer());
-                        case Util.GET_APPLICATION_IDS:
+                        case GET_APPLICATION_IDS:
                             return getApplicationIDs(apdu, apdu.getBuffer());
-                        case Util.READ_DATA:
+                        case READ_DATA:
                             return sendBlockResponse(apdu, apdu.getBuffer(), dataBuffer, offset, fileSecurityLevel);
-                        case Util.WRITE_DATA:
+                        case WRITE_DATA:
                             writeData(apdu, apdu.getBuffer());
                             break;
-                        case Util.READ_RECORDS:
+                        case READ_RECORDS:
                             return readRecords(apdu, apdu.getBuffer());
-                        case Util.WRITE_RECORD:
+                        case WRITE_RECORD:
                             writeRecord(apdu, apdu.getBuffer());
                             break;
-                        case Util.GET_VERSION:
+                        case GET_VERSION:
                             return getVersion(apdu, apdu.getBuffer());
                         default:
                             IsoException.throwIt((short) 0x911C);

@@ -19,7 +19,7 @@ android {
 
 dependencies {
     compile files('libs/javastruct-0.1.jar')
-    compile files('libs/sc-light-jdk15on-1.47.0.2.jar')
-    compile files('libs/scpkix-jdk15on-1.47.0.2.jar')
-    compile files('libs/scprov-jdk15on-1.47.0.2.jar')
+    compile 'com.madgag:sc-light-jdk15on:1.47.0.2'
+    compile 'com.madgag:scpkix-jdk15on:1.47.0.2'
+    compile 'com.madgag:scprov-jdk15on:1.47.0.2'
 }

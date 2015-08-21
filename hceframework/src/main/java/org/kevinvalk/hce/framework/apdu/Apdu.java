@@ -4,6 +4,9 @@ import org.spongycastle.util.Arrays;
 
 public class Apdu
 {
+	public static final String RESPONSE_APDU = "responseApdu";
+	public static final String COMMAND_APDU = "commandApdu";
+
 	private byte[] apdu;
 	
 	public Apdu()
