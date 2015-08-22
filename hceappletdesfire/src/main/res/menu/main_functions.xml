@@ -1,0 +1,20 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+
+    <item android:id="@+id/menuSessionEditorLoad"
+          android:icon="@android:drawable/ic_menu_view"
+          android:title="@string/action_choose_file"
+          android:showAsAction="ifRoom" />
+
+    <item android:id="@+id/menuSessionEditorSave"
+          android:icon="@android:drawable/ic_menu_save"
+          android:title="@string/action_save"
+          android:showAsAction="ifRoom" />
+
+    <item
+        android:id="@+id/action_settings"
+        android:orderInCategory="100"
+        android:showAsAction="never"
+        android:title="@string/action_settings"/>
+
+</menu>

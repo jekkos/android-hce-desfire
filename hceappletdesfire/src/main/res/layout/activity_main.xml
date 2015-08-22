@@ -34,10 +34,10 @@
             android:layout_alignParentBottom="true" android:id="@+id/linearLayout">
         <Button
                 android:layout_height="wrap_content"
-                android:text="@string/saveButtonText"
+                android:text="@string/action_save"
                 android:id="@+id/saveButton" android:layout_gravity="bottom|left"
                 android:layout_weight="0.5" android:layout_width="wrap_content"/>
-        <Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/clearButtonText"
+        <Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/action_clear"
                 android:id="@+id/clearButton" android:layout_gravity="bottom|right"
                 android:layout_weight="0.5"/>
     </LinearLayout>

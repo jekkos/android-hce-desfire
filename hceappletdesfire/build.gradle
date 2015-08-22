@@ -1,12 +1,16 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 19
-    buildToolsVersion '19.1.0'
+    compileSdkVersion 22
+    buildToolsVersion "22.0.1"
+
     defaultConfig {
-        applicationId "net.jpeelaer.hce.desfire"
-        minSdkVersion 16
-        targetSdkVersion 19
+        applicationId "net.jpeelaer.hce"
+        minSdkVersion 19
+        targetSdkVersion 21
+        testApplicationId "net.jpeelaer.hce"
+        versionCode 1
+        versionName "1.0"
     }
     buildTypes {
         release {
@@ -14,8 +18,7 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
         }
     }
-    productFlavors {
-    }
+
     testOptions {
         unitTests.returnDefaultValues = true
     }
@@ -24,7 +27,7 @@ android {
 
 dependencies {
     compile project(':hceframework')
-    compile 'com.android.support:support-v4:19.1.0'
+    compile 'org.yaml:snakeyaml:1.5'
     testCompile 'org.mockito:mockito-all:1.9.5'
     testCompile 'junit:junit:4.12'
     testCompile 'com.google.guava:guava:14.0.1'

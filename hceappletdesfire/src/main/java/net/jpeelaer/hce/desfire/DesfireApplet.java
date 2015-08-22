@@ -34,15 +34,12 @@ public class DesfireApplet extends Applet {
     // DESFire AID
     private static final byte[] APPLET_AID = {(byte) 0xD2, 0x76, 0x00, 0x00, (byte) 0x85, 0x01, 0x00};
 
-    private static final String APPLET_NAME = "desfire-hce";
-
-    private static final String LOG_TAG = "DesfireHce";
+    private static final String LOG_TAG = DesfireApplet.class.getSimpleName();
 
     // similar as AES_encrypt in openssl/aes.h?
     final Cipher AES_CIPHER = Cipher.getInstance("AES/CBC/PKCS5Padding");
     final Cipher DES_CIPHER = Cipher.getInstance("DES/ECB/NoPadding");
 
-    private ConcurrentLinkedQueue<Apdu> apdus = new ConcurrentLinkedQueue<Apdu>();
     /**
      * Master file of the card
      */
@@ -436,8 +433,8 @@ public class DesfireApplet extends Applet {
      * Configures the card and pre personalizes the card with a key, defines if the UID or the
      * random ID is sent back during communication setup and configures the ATS string
      *
-     * @throws Master key authentication on card level needs to be performed elsewise
-     *                throw PERMISSION_DENIED
+     * Master key authentication on card level needs to be performed elsewise
+     *                throws PERMISSION_DENIED
      * @note || Option | ciphered( data || CRC )||
      */
     private void setConfiguration(Apdu Apdu, byte[] buffer) {
@@ -511,7 +508,7 @@ public class DesfireApplet extends Applet {
      * Creates files for the storage of plain unformatted user data within
      * an existing application on the PICC
      *
-     * @throws Throw PERMISION_DENIED if card level is selected or the application's configuration doesn't allow
+     * Throws PERMISION_DENIED if card level is selected or the application's configuration doesn't allow
      *               manage for the current authentication state.
      * @note The MSB in the 3 bytes values is not readed.
      * @note || File Number | Iso7816 FileID* | CommunicationSettings | AccessRights | FileSize(3) ||
@@ -553,7 +550,7 @@ public class DesfireApplet extends Applet {
      * an existing application on the PICC, additionally supporting the feature
      * of an integrated backup mechanism
      *
-     * @throws Throw PERMISION_DENIED if card level is selected or the application's configuration doesn't allow
+     * Throws PERMISION_DENIED if card level is selected or the application's configuration doesn't allow
      *               manage for the current authentication state.
      * @note The MSB in the 3 bytes values is not readed.
      * @note || File Number | Iso7816 FileID* | CommunicationSettings | AccessRights | FileSize(3) ||
@@ -1763,13 +1760,20 @@ public class DesfireApplet extends Applet {
     }
 
     public String getName() {
-        return APPLET_NAME;
+        return LOG_TAG;
     }
 
     public byte[] getAid() {
         return APPLET_AID;
     }
 
+    public MasterFile getMasterFile() {
+        return masterFile;
+    }
+
+    public void setMasterFile(MasterFile masterFile) {
+        this.masterFile = masterFile;
+    }
 }
 
 

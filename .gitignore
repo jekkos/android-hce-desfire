@@ -2,3 +2,5 @@ build/
 lib/
 libs/
 .gradle/
+.idea/
+*.iml

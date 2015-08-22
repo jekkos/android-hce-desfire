@@ -62,10 +62,11 @@ public class Util {
 	 public final static short WRONG_VALUE_ERROR=(short)0x916E;
 	 
 	 //Others
-	 public final static byte MAX_DATA_SIZE=100;//MEJORAR ESTE VALOR  
-	 											//FALTA
-	 
-	 public static byte[] rotateLeft(byte[] c){
+	 public final static byte MAX_DATA_SIZE=100;//MEJORAR ESTE VALOR
+
+	//FALTA
+
+	public static byte[] rotateLeft(byte[] c){
 		 byte[] c1=new byte[c.length];
 		 c1[(byte)(c.length-1)]=c[0];
 		 for (byte i = 1; i < c1.length; i++) {

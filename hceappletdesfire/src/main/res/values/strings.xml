@@ -1,9 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <string name="app_name">Desfire HCE</string>
+    <string name="app_name">Desfire Hce</string>
+
+    <string name="action_save">Save</string>
+    <string name="action_clear">Save</string>
+
+    <string name="title_activity_file_chooser">File Chooser</string>
+    <string name="text_chooser_info_text">Choose a file:</string>
+    <string name="text_no_files_in_chooser">No files found</string>
+    <string name="action_choose_file">Choose Selected File</string>
+    <string name="action_open_dump_file">Open Dump File</string>
+    <string name="action_delete_file">Delete File</string>
+    <string name="info_empty_file_name">Error: Files must have a name</string>
+    <string name="info_no_external_storage">Error: External storage is not
+        readable/writable</string>
     <string name="action_settings">Settings</string>
-    <string name="clearButtonText">Clear</string>
-    <string name="saveButtonText">Save</string>
+
+    <string name="dialog_save_session_title">Save session</string>
+    <string name="dialog_save_session">Enter a file name for the session:</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="dialog_save_conflict_title">File already exists</string>
+    <string name="dialog_save_conflict_session">This file already exists.
+        What do you want to do?
+        \n</string>
+
+    <string name="info_save_successful">Data successfully saved</string>
+    <string name="info_save_error">Error: Error while saving data</string>
+    <string name="action_replace">Replace</string>
+
+    <string name="text_open_session_title">Open Session</string>
 
 </resources>

@@ -13,6 +13,7 @@ public class AppletThread implements Runnable
 
 	public static final String LAST_APDUS = "apdus";
 	private static final String LAST_ERROR = "lastError";
+	private final String TAG = getClass().getSimpleName();
 
 	private volatile boolean isRunning = false;
 	private Applet applet = null;
@@ -99,13 +100,13 @@ public class AppletThread implements Runnable
 			catch(Exception e)
 			{
 				// We got a hard error so stop this
-				Util.d("THREAD", "Caught exception `%s` at %s", e.getMessage(), e.getStackTrace()[0].toString());
+				Util.d(TAG, "Caught exception `%s` at %s", e.getMessage(), e.getStackTrace()[0].toString());
 				isRunning = false;
 				return;
 			}
 		}
 		
-		Util.d("THREAD", "Gracefull stop");
+		Util.d(TAG, "Graceful stop");
 	}
 
 	private void publishException(Exception lastError) {
@@ -120,16 +121,16 @@ public class AppletThread implements Runnable
 	 * Sends an APDU to the terminal and waits for the next one
 	 * 
 	 * @param tag
-	 * @param Apdu The APDU to send
+	 * @param responseApdu The APDU to send
 	 * @return Apdu response
 	 */
 	public Apdu sendApdu(TagWrapper tag, ResponseApdu responseApdu) throws IOException
 	{	
 		if(responseApdu != null) {
-			Util.d("HceFramework", "<- %s", Util.toHex(responseApdu.getBuffer()));
+			Util.d(TAG, "<- %s", Util.toHex(responseApdu.getBuffer()));
 		}
 		byte [] response = tag.transceive((responseApdu == null ? new byte[0] : responseApdu.getBuffer()));
-		Util.d("HceFramework", "-> %s", Util.toHex(response));
+		Util.d(TAG, "-> %s", Util.toHex(response));
 		Apdu commandApdu = new Apdu(response);
 		publishApdu(commandApdu, responseApdu);
 		return commandApdu;
