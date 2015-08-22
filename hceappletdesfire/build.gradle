@@ -18,7 +18,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
         }
     }
-
+    productFlavors {
+    }
     testOptions {
         unitTests.returnDefaultValues = true
     }

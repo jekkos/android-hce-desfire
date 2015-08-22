@@ -14,31 +14,17 @@
             android:fillViewport="true" android:layout_alignParentLeft="true"
             android:layout_alignParentStart="false"
             android:layout_alignParentTop="true" android:layout_alignParentEnd="false"
-            android:layout_above="@+id/linearLayout">
+            android:layout_alignParentBottom="true">
         <TextView
             android:id="@+id/apduView"
             style="@style/AppTheme"
-            android:layout_width="wrap_content"
+            android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:scrollbars = "vertical"
             android:autoText="false"
             android:textColor="@android:color/holo_green_dark"
             android:textIsSelectable="true" android:layout_gravity="top" android:editable="false"
-            android:gravity="right|top"/>
+            android:gravity="right|top" android:lines="20"/>
     </ScrollView>
-    <LinearLayout
-            android:orientation="horizontal"
-            android:layout_width="fill_parent"
-            android:layout_height="wrap_content" android:layout_centerHorizontal="true"
-            android:gravity="center|center_horizontal|bottom" android:weightSum="1"
-            android:layout_alignParentBottom="true" android:id="@+id/linearLayout">
-        <Button
-                android:layout_height="wrap_content"
-                android:text="@string/action_save"
-                android:id="@+id/saveButton" android:layout_gravity="bottom|left"
-                android:layout_weight="0.5" android:layout_width="wrap_content"/>
-        <Button android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/action_clear"
-                android:id="@+id/clearButton" android:layout_gravity="bottom|right"
-                android:layout_weight="0.5"/>
-    </LinearLayout>
+
 </RelativeLayout>

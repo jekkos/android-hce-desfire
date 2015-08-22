@@ -26,6 +26,7 @@ import android.widget.Toast;
 import net.jpeelaer.hce.R;
 import net.jpeelaer.hce.desfire.DesFireInstruction;
 import net.jpeelaer.hce.desfire.DesfireApplet;
+import org.kevinvalk.hce.framework.AppletThread;
 import org.kevinvalk.hce.framework.HceFramework;
 import org.kevinvalk.hce.framework.TagWrapper;
 import org.kevinvalk.hce.framework.apdu.Apdu;
@@ -78,7 +79,11 @@ public class EmulationActivity extends Activity implements SavableActivity {
 
         @Override
         public void propertyChange(PropertyChangeEvent event) {
-            publishApdu((Apdu[]) event.getNewValue(), event.getPropertyName());
+            if (AppletThread.LAST_APDUS.equals(event.getPropertyName())) {
+                publishApdu((Apdu[]) event.getNewValue(), event.getPropertyName());
+            } else if (AppletThread.LAST_ERROR.equals(event.getPropertyName())) {
+                publishError((Exception) event.getNewValue());
+            }
         }
 
     };
@@ -107,6 +112,18 @@ public class EmulationActivity extends Activity implements SavableActivity {
         return true;
     }
 
+    private void publishError(final Exception error) {
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+
+            @Override
+            public void run() {
+                TextView tv = (TextView) findViewById(R.id.apduView);
+                appendColoredText(tv, error.getMessage(), R.color.red);
+            }
+        });
+    }
+
     private  void publishApdu(final Apdu[] apdus, final String apduType) {
         Handler handler = new Handler(Looper.getMainLooper());
         handler.post(new Runnable() {
@@ -117,14 +134,14 @@ public class EmulationActivity extends Activity implements SavableActivity {
                 for (Apdu apdu : apdus) {
                     String s = String.valueOf(apdu.getBuffer());
                     boolean isCommandApdu = Apdu.COMMAND_APDU.equals(apduType);
-                    String prefix = isCommandApdu ? "->" : "<-";
+                    String prefix = isCommandApdu ? "--> " : "<-- ";
                     String text = prefix + " " + s + System.getProperty("line.separator");
                     if (isCommandApdu) {
                         CommandApdu commandApdu = (CommandApdu) apdu;
                         DesFireInstruction desFireInstruction = DesFireInstruction.parseInstruction(commandApdu.ins);
-                        appendColoredText(tv, " *** " + desFireInstruction.name() + " ***", Color.YELLOW);
+                        appendColoredText(tv, " *** " + desFireInstruction.name() + " ***", R.color.yellow);
                     }
-                    appendColoredText(tv, text, isCommandApdu ? Color.MAGENTA : Color.GREEN);
+                    appendColoredText(tv, text, isCommandApdu ? R.color.dark_green : R.color.orange);
                 }
 
             }

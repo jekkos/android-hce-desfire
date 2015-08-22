@@ -11,8 +11,8 @@ import org.kevinvalk.hce.framework.apdu.ResponseApdu;
 public class AppletThread implements Runnable
 {
 
-	public static final String LAST_APDUS = "apdus";
-	private static final String LAST_ERROR = "lastError";
+	public static final String LAST_APDUS = "lastApdus";
+	public static final String LAST_ERROR = "lastError";
 	private final String TAG = getClass().getSimpleName();
 
 	private volatile boolean isRunning = false;
@@ -92,14 +92,15 @@ public class AppletThread implements Runnable
 				catch(IsoException iso)
 				{
 					// We got an soft error so send response to our terminal
-					responseApdu = new ResponseApdu(iso.getErrorCode());
-					apdu = sendApdu(tag, responseApdu);
+					setLastError(iso);
+					apdu = sendApdu(tag, new ResponseApdu(iso.getErrorCode()));
 
 				}
 			}
 			catch(Exception e)
 			{
 				// We got a hard error so stop this
+				setLastError(e);
 				Util.d(TAG, "Caught exception `%s` at %s", e.getMessage(), e.getStackTrace()[0].toString());
 				isRunning = false;
 				return;
@@ -109,11 +110,19 @@ public class AppletThread implements Runnable
 		Util.d(TAG, "Graceful stop");
 	}
 
-	private void publishException(Exception lastError) {
+	private void setLastError(Exception lastError) {
 		propertyChangeSupport.firePropertyChange(LAST_ERROR, this.lastError, this.lastError = lastError);
 	}
 
-	private void publishApdu(Apdu... lastApdus) {
+	public Exception getLastError() {
+		return lastError;
+	}
+
+	public Apdu[] getLastApdus() {
+		return lastApdus;
+	}
+
+	public void setLastApdus(Apdu... lastApdus) {
 		propertyChangeSupport.firePropertyChange(LAST_APDUS, this.lastApdus, this.lastApdus = lastApdus);
 	}
 
@@ -132,7 +141,7 @@ public class AppletThread implements Runnable
 		byte [] response = tag.transceive((responseApdu == null ? new byte[0] : responseApdu.getBuffer()));
 		Util.d(TAG, "-> %s", Util.toHex(response));
 		Apdu commandApdu = new Apdu(response);
-		publishApdu(commandApdu, responseApdu);
+		setLastApdus(commandApdu, responseApdu);
 		return commandApdu;
 	}
 	
