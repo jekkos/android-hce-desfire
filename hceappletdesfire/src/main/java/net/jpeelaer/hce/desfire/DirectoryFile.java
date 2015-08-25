@@ -2,6 +2,7 @@ package net.jpeelaer.hce.desfire;
 
 import java.security.InvalidKeyException;
 import java.security.Key;
+import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 
@@ -61,10 +62,6 @@ public class DirectoryFile extends File {
         } catch (Exception e) {
             Log.e("NFC", e.getMessage(), e);
         }
-//		
-//		DESKey newKey=(DESKey)KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES3_2KEY, false);
-//		newKey.clearKey();
-//		newKey.setKey(Util.DEFAULT_MASTER_KEY, (byte)0);
         maxKeyNumber = -1;
 
     }
@@ -72,39 +69,29 @@ public class DirectoryFile extends File {
     /**
      * Constructor for the applications
      */
-    protected DirectoryFile(byte fid, byte[] keySettings, DirectoryFile parent) throws InvalidKeySpecException,
-            InvalidKeyException, NoSuchAlgorithmException {
+    protected DirectoryFile(byte fid, byte[] keySettings, DirectoryFile parent) {
         super(fid, parent);//llama al constructor de la clase File
         changeKeySettings(keySettings[0]);
-        keyType = (byte) (keySettings[1] >> 6);
+        keyType = (byte) (keySettings[1] & 0xF0);
         maxKeyNumber = (byte) (keySettings[1] & (byte) 0x0F);
-        if ((keySettings[1] & (byte) 0x10) == (byte) 0x10) ISOFileIDSupported = true;
-        else ISOFileIDSupported = false;
+        ISOFileIDSupported = (keySettings[1] & (byte) 0x10) == (byte) 0x10;
 
-        for (byte i = 0; i < activatedFiles.length; i++) {
-            activatedFiles[i] = false;
-        }
-        for (byte i = 0; i < waitingForTransaction.length; i++) {
-            waitingForTransaction[i] = false;
-        }
-
-//		Key claveAux=KeyBuilder.buildKey(KeyBuilder.TYPE_DES, KeyBuilder.LENGTH_DES, false);
         keyList = new Key[maxKeyNumber];
         byte[] defaultKey = ((MasterFile) getParent()).getDefaultKey();
         // for auth it's des or aes, 8 byte or 16 block size
         keyList[0] = generateSecretKey(defaultKey);//Application Master Key
     }
 
-    public void setAID(byte[] AID) {
-    }
+    public void setAID(byte[] AID) { }
 
     public byte getNumberFiles() {
         return numberFiles;
     }
 
     public File getFile(byte fid) {
-        if (activatedFiles[fid] == true) return (arrayFiles[fid]);
-        else {
+        if (activatedFiles[fid] == true) {
+            return (arrayFiles[fid]);
+        }  else {
             IsoException.throwIt((short) Util.FILE_NOT_FOUND);//File not found
             return null;
         }
@@ -150,45 +137,33 @@ public class DirectoryFile extends File {
         return masterKey;
     }
 
-    private Key generateSecretKey(byte[] keyBytes) throws InvalidKeyException, InvalidKeySpecException, NoSuchAlgorithmException {
-        SecretKeyFactory secretKeyFactory = null;
+    private Key generateSecretKey(byte[] keyBytes) {
+        KeyFactory secretKeyFactory = null;
         Key key = null;
         switch (keyType) {
             //La master key puede ser 3DES(16), TKDES(24) o AES(16)
-            // will be 0x00 for DES, 0x01 for TDES, 0x02 for AES
             case Util.AES: {
-                secretKeyFactory = SecretKeyFactory.getInstance("AES/CBC/PKCS5Padding");
-                key = secretKeyFactory.generateSecret(new SecretKeySpec(keyBytes, "AES"));
+                key = new SecretKeySpec(keyBytes, "AES");
                 break;
             }
             case Util.TDES:
             case Util.TKTDES: {
-                secretKeyFactory = SecretKeyFactory.getInstance("DESede/ECB/NoPadding");
-                key = secretKeyFactory.generateSecret(new DESedeKeySpec(keyBytes));
+                key = new SecretKeySpec(keyBytes, "DESede");
             }
         }
-
         return key;
     }
 
     public void changeKey(byte keyNumber, byte[] keyBytes) {
         if (keyNumber >= maxKeyNumber) IsoException.throwIt(Util.NO_SUCH_KEY);//No Such Key
-        try {
-            if (isMasterFile()) { //Si es Master File
-                //Segun el keyNumber se decide el tipo de clave que tenemos.
-                //FALTA
-                Key newKey = generateSecretKey(keyBytes);
-                masterKey = newKey;
-            } else {//It's not MasterFile
-                Key newKey = generateSecretKey(keyBytes);
-                keyList[keyNumber] = newKey;
-            }
-        } catch (InvalidKeyException e) {
-            IsoException.throwIt(Util.NO_SUCH_KEY);
-        } catch (InvalidKeySpecException e) {
-            IsoException.throwIt(Util.NO_SUCH_KEY);
-        } catch (NoSuchAlgorithmException e) {
-            IsoException.throwIt(Util.NO_SUCH_KEY);
+        if (isMasterFile()) { //Si es Master File
+            //Segun el keyNumber se decide el tipo de clave que tenemos.
+            //FALTA
+            Key newKey = generateSecretKey(keyBytes);
+            masterKey = newKey;
+        } else {//It's not MasterFile
+            Key newKey = generateSecretKey(keyBytes);
+            keyList[keyNumber] = newKey;
         }
     }
 

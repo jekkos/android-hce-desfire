@@ -48,16 +48,9 @@ import java.util.Locale;
 
 public class EmulationActivity extends Activity implements SavableActivity {
 
-    //private static final String TECH_ISO_A = "android.nfc.tech.NfcA";
-
     public static final String TECH_ISO_PCDA = "android.nfc.tech.IsoPcdA";
-    /**
-     * The serialization (saved instance state) Bundle key representing the
-     * current dropdown position.
-     */
-    private static final String STATE_SELECTED_NAVIGATION_ITEM = "selected_navigation_item";
 
-    private final static int FILE_CHOOSER_DUMP_FILE = 1;
+    private static final int FILE_CHOOSER_DUMP_FILE = 1;
 
     private static final String TAG = EmulationActivity.class.getSimpleName();
 
@@ -112,14 +105,18 @@ public class EmulationActivity extends Activity implements SavableActivity {
         return true;
     }
 
-    private void publishError(final Exception error) {
+    private void publishError(Exception e) {
+        publishMessage(e.getMessage(), R.color.red);
+    }
+
+    private void publishMessage(final String message, final int color) {
         Handler handler = new Handler(Looper.getMainLooper());
         handler.post(new Runnable() {
 
             @Override
             public void run() {
                 TextView tv = (TextView) findViewById(R.id.apduView);
-                appendColoredText(tv, error.getMessage(), R.color.red);
+                appendColoredText(tv, message, color);
             }
         });
     }
@@ -134,13 +131,14 @@ public class EmulationActivity extends Activity implements SavableActivity {
                 for (Apdu apdu : apdus) {
                     String s = String.valueOf(apdu.getBuffer());
                     boolean isCommandApdu = Apdu.COMMAND_APDU.equals(apduType);
-                    String prefix = isCommandApdu ? "--> " : "<-- ";
-                    String text = prefix + " " + s + System.getProperty("line.separator");
+
                     if (isCommandApdu) {
                         CommandApdu commandApdu = (CommandApdu) apdu;
                         DesFireInstruction desFireInstruction = DesFireInstruction.parseInstruction(commandApdu.ins);
                         appendColoredText(tv, " *** " + desFireInstruction.name() + " ***", R.color.yellow);
                     }
+                    String prefix = isCommandApdu ? "--> " : "<-- ";
+                    String text = prefix + " " + s;
                     appendColoredText(tv, text, isCommandApdu ? R.color.dark_green : R.color.orange);
                 }
 
@@ -148,13 +146,13 @@ public class EmulationActivity extends Activity implements SavableActivity {
         });
     }
 
-    public static void appendColoredText(TextView tv, String text, int color) {
+    public void appendColoredText(TextView tv, String text, int color) {
         int start = tv.getText().length();
-        tv.append(text);
+        tv.append(text + System.getProperty("line.separator"));
         int end = tv.getText().length();
-
         Spannable spannableText = (Spannable) tv.getText();
-        spannableText.setSpan(new ForegroundColorSpan(color), start, end, 0);
+        ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(getResources().getColor(color));
+        spannableText.setSpan(foregroundColorSpan, start, end,  Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
     }
 
     /**
@@ -309,13 +307,17 @@ public class EmulationActivity extends Activity implements SavableActivity {
             pendingIntent = PendingIntent.getActivity(this, 0, new Intent(this, getClass()).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), 0);
             filters = new IntentFilter[] {new IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED)};
             techLists = new String[][] { { TECH_ISO_PCDA} };
-            
+
+            publishMessage("Desfire emulator ready", Color.WHITE);
+            publishMessage("Waiting for nfc initiate", Color.WHITE);
+
             // Force intent
             Intent intent = getIntent();
             String action = intent.getAction();
             if (NfcAdapter.ACTION_TECH_DISCOVERED.equals(action))
                 handleTag(intent);
         } catch(Exception e) {
+            publishError(e);
         	Log.e(TAG, "Failed to initialize applet", e);
         }
 	}

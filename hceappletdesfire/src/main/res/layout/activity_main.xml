@@ -10,7 +10,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:id="@+id/scrollView" android:layout_gravity="center|top" android:longClickable="false"
-            android:background="#ff000000"
             android:fillViewport="true" android:layout_alignParentLeft="true"
             android:layout_alignParentStart="false"
             android:layout_alignParentTop="true" android:layout_alignParentEnd="false"
@@ -22,9 +21,11 @@
             android:layout_height="wrap_content"
             android:scrollbars = "vertical"
             android:autoText="false"
-            android:textColor="@android:color/holo_green_dark"
+            android:textColor="@android:color/holo_blue_bright"
             android:textIsSelectable="true" android:layout_gravity="top" android:editable="false"
-            android:gravity="right|top" android:lines="20"/>
+            android:gravity="left|top" android:lines="20" android:padding="8dp"
+            android:singleLine="false" android:textColorHighlight="@color/orange" android:textColorHint="@color/red"
+            android:textSize="16dp" android:typeface="normal"/>
     </ScrollView>
 
 </RelativeLayout>

@@ -64,16 +64,8 @@ public class MasterFile extends DirectoryFile {
         if (searchAID(AID) != (byte) -1) IsoException.throwIt(Util.DUPLICATE_ERROR);//AID repetida
         if (numApp == 27) IsoException.throwIt((short) 0x91CE);//Num App excede las 28
         indexDF.writeRecord(numApp, AID);
-        try {
         arrayDF[numApp] = new DirectoryFile(numApp, keySettings, this);
         numApp++;
-        } catch (NoSuchAlgorithmException e) {
-            IsoException.throwIt(Util.FILE_INTEGRITY_ERROR);
-        } catch (InvalidKeySpecException e) {
-            IsoException.throwIt(Util.FILE_INTEGRITY_ERROR);
-        } catch (InvalidKeyException e) {
-            IsoException.throwIt(Util.FILE_INTEGRITY_ERROR);
-        }
         return (byte) (numApp - 1);
     }
 

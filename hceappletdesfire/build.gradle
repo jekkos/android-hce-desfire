@@ -18,6 +18,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.txt'
         }
     }
+
+    sourceSets {
+        instrumentTest.setRoot('src/test/java')
+    }
+
     productFlavors {
     }
     testOptions {
@@ -28,7 +33,7 @@ android {
 
 dependencies {
     compile project(':hceframework')
-    compile 'org.yaml:snakeyaml:1.5'
+    compile 'org.yaml:snakeyaml:1.16'
     testCompile 'org.mockito:mockito-all:1.9.5'
     testCompile 'junit:junit:4.12'
     testCompile 'com.google.guava:guava:14.0.1'

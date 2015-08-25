@@ -37,8 +37,8 @@ public class Util {
 	
 	//Key types
 	 final static byte TDES = (byte) 0x00;
-	 final static byte TKTDES = (byte) 0x01;
-	 final static byte AES = (byte) 0x02;
+	 final static byte TKTDES = (byte) 0x40;
+	 final static byte AES = (byte) 0x80;
 
 	 //File types 
 	 final static byte STANDARD_DATA_FILE=(byte)0x0;
@@ -54,7 +54,7 @@ public class Util {
 	 
 	 public final static byte[] DEFAULT_MASTER_KEY={(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,
 			 (byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, 
-			 (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00};
+			 (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00};
 	 // 3DES;	 public final static byte[] RANDOM_A={(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC};
 	 public final static byte[] CHECKSUM_IV={(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00};
 	 

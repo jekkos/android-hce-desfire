@@ -286,7 +286,7 @@ public class DesfireApplet extends Applet {
 
         if (masterFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
         if (masterFile.getIndexDF().hasWriteAccess((byte) 0) == false)
-            IsoException.throwIt(Util.PERMISSION_DENIED);//CREO QUE SOBRA
+            IsoException.throwIt(Util.PERMISSION_DENIED);//CREO QUE SOBRAins
         byte[] AID = {buffer[Iso7816.OFFSET_CDATA], buffer[Iso7816.OFFSET_CDATA + 1], buffer[Iso7816.OFFSET_CDATA + 2]};
         byte[] keySettings = {buffer[Iso7816.OFFSET_CDATA + 3], buffer[Iso7816.OFFSET_CDATA + 4]};
 
