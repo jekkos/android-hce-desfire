@@ -62,31 +62,31 @@ public class FileChooserActivity extends Activity {
      * are the files the user can choose from. This must be in the Intent.
      */
     public final static String EXTRA_DIR =
-            "de.syss.MifareClassicTool.Activity.DIR";
+            "net.jpeelaer.hce.Activity.DIR";
     /**
      * The title of the activity. Optional.
      * e.g. "Open Dump File"
      */
     public final static String EXTRA_TITLE =
-            "de.syss.MifareClassicTool.Activity.TITLE";
+            "net.jpeelaer.hce.Activity.TITLE";
     /**
      * The small text above the files. Optional.
      * e.g. "Please choose a file:
      */
     public final static String EXTRA_CHOOSER_TEXT =
-            "de.syss.MifareClassicTool.Activity.CHOOSER_TEXT";
+            "net.jpeelaer.hce.Activity.CHOOSER_TEXT";
     /**
      * The text of the choose button. Optional.
      * e.g. "Open File"
      */
     public final static String EXTRA_BUTTON_TEXT =
-            "de.syss.MifareClassicTool.Activity.BUTTON_TEXT";
+            "net.jpeelaer.hce.Activity.BUTTON_TEXT";
     /**
      * Enable/Disable the menu item  that allows the user to delete a file.
      * Optional. Boolean value. Disabled (false) by default.
      */
     public final static String EXTRA_ENABLE_DELETE_FILE =
-            "de.syss.MifareClassicTool.Activity.ENABLE_DELETE_FILE";
+            "net.jpeelaer.hce.Activity.ENABLE_DELETE_FILE";
 
 
     // Output parameter.
@@ -96,14 +96,14 @@ public class FileChooserActivity extends Activity {
      * {@link Activity#RESULT_OK}.
      */
     public final static String EXTRA_CHOSEN_FILE =
-            "de.syss.MifareClassicTool.Activity.CHOSEN_FILE";
+            "net.jpeelaer.hce.Activity.CHOSEN_FILE";
     /**
      * The filename (without path) that will be passed via Intent
      * to onActivityResult() method. The result code will be
      * {@link Activity#RESULT_OK}.
      */
     public final static String EXTRA_CHOSEN_FILENAME =
-            "de.syss.MifareClassicTool.Activity.EXTRA_CHOSEN_FILENAME";
+            "net.jpeelaer.hce.Activity.EXTRA_CHOSEN_FILENAME";
 
 
     private static final String LOG_TAG =

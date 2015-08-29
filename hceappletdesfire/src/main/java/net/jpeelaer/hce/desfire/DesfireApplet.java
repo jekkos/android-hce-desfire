@@ -1,15 +1,12 @@
 package net.jpeelaer.hce.desfire;
 
 import java.beans.PropertyChangeSupport;
-import java.security.InvalidKeyException;
-import java.security.Key;
-import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.SecureRandom;
+import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.kevinvalk.hce.framework.Applet;
@@ -37,8 +34,9 @@ public class DesfireApplet extends Applet {
     private static final String LOG_TAG = DesfireApplet.class.getSimpleName();
 
     // similar as AES_encrypt in openssl/aes.h?
-    final Cipher AES_CIPHER = Cipher.getInstance("AES/CBC/PKCS5Padding");
-    final Cipher DES_CIPHER = Cipher.getInstance("DES/ECB/NoPadding");
+    final Cipher AES_CIPHER;
+    final Cipher DES_CIPHER;
+    final Cipher TDES_CIPHER;
 
     /**
      * Master file of the card
@@ -105,7 +103,7 @@ public class DesfireApplet extends Applet {
      * @throws InvalidKeySpecException
      * @throws InvalidKeyException
      */
-    public DesfireApplet() throws NoSuchAlgorithmException, NoSuchProviderException, NoSuchPaddingException, InvalidKeyException, InvalidKeySpecException {
+    public DesfireApplet() throws NoSuchPaddingException, NoSuchAlgorithmException {
         masterFile = new MasterFile();
         selectedDF = masterFile;
         commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
@@ -114,6 +112,9 @@ public class DesfireApplet extends Applet {
         keyNumberToAuthenticate = 0;
         authenticated = Util.NO_KEY_AUTHENTICATED;
         securityLevel = Util.PLAIN_COMMUNICATION;
+        AES_CIPHER = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        DES_CIPHER = Cipher.getInstance("DES/CBC/NoPadding");
+        TDES_CIPHER = Cipher.getInstance("DESede/CBC/NoPadding");
     }
 
     /**
@@ -130,7 +131,8 @@ public class DesfireApplet extends Applet {
      * @note This procedure has two parts. depending on the commandToContinue status.
      * @note ||KeyNumber||
      */
-    private ResponseApdu authenticate(Apdu Apdu, byte[] buffer) throws ShortBufferException, IllegalBlockSizeException, BadPaddingException, InvalidKeyException, InvalidKeySpecException, NoSuchAlgorithmException {
+    private ResponseApdu authenticate(Apdu Apdu, byte[] buffer) throws InvalidAlgorithmParameterException, InvalidKeyException,
+            BadPaddingException, ShortBufferException, IllegalBlockSizeException, InvalidKeySpecException, NoSuchAlgorithmException {
         //Apdu: KeyNo
 
         if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
@@ -143,6 +145,8 @@ public class DesfireApplet extends Applet {
             randomNumberToAuthenticate = new byte[8];
             SecureRandom sr = new SecureRandom();
             sr.nextBytes(randomNumberToAuthenticate);
+            //Arrays.fill(randomNumberToAuthenticate, (byte) 0);
+
             //Ek(RndB) is created
             byte[] ekRndB = new byte[8];
 
@@ -162,10 +166,10 @@ public class DesfireApplet extends Applet {
             byte[] rndB = new byte[8];
             byte[] rndArndB = new byte[16];
             //Ek(RndA-RndB') is recieved. RndB' is a 8 bits left-shift of RndB	
-            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + 16));
+            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + 15));
 
-            // in legacy mode this might nog be correct?
-            Cipher cipher = deriveCipherForFile(Cipher.DECRYPT_MODE);
+            // decrypt in legacy mode (ins = 0x0A), encrypt otherwise
+            Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE);
             cipher.doFinal(encryptedRndArndB, (short) 0, (short) 16, rndArndB, (short) 0);
             rndA = Util.subByteArray(rndArndB, (byte) 0, (byte) 7);
             rndB = Util.subByteArray(rndArndB, (byte) 8, (byte) 15);
@@ -191,19 +195,24 @@ public class DesfireApplet extends Applet {
         }
     }
 
-    private Cipher deriveCipherForFile(int opmode) throws InvalidKeyException {
+    private Cipher deriveCipherForFile(int opmode) throws InvalidKeyException, InvalidAlgorithmParameterException {
         Key key = selectedDF.getMasterKey();
         if (!selectedDF.isMasterFile()) {
             key = selectedDF.getKey(keyNumberToAuthenticate);
         }
         Cipher cipher = deriveCipherFromKey(key);
-        cipher.init(opmode, key);
+        byte[] ivBytes = new byte[8];
+        java.util.Arrays.fill(ivBytes, (byte) 0);
+        IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
+        cipher.init(opmode, key, ivParameterSpec);
         return cipher;
     }
 
     public Cipher deriveCipherFromKey(Key key) {
         if (key.getAlgorithm().contains("AES")) {
             return AES_CIPHER;
+        } else if (key.getAlgorithm().contains("DESede")) {
+            return TDES_CIPHER;
         }
         return DES_CIPHER;
     }
@@ -1463,8 +1472,8 @@ public class DesfireApplet extends Applet {
             default:
                 break;
         }
-        SecretKeyFactory keyFactory = SecretKeyFactory.getInstance(algorithm);
-        sessionKey = keyFactory.generateSecret(new SecretKeySpec(newSessionKey, algorithm));
+
+        sessionKey = new SecretKeySpec(newSessionKey, algorithm);
         securityLevel = Util.FULLY_ENCRYPTED;
         //Apdu.setOutgoingLength( (short) response.length );
         for (byte i = 0; i < response.length; i++) {
@@ -1648,6 +1657,7 @@ public class DesfireApplet extends Applet {
             switch (instruction) {
                 case GET_VERSION:
                     return getVersion(apdu, apdu.getBuffer());
+                // legacy authentication
                 case AUTHENTICATE:
                     return authenticate(apdu, apdu.getBuffer());
                 case AUTHENTICATE_AES:

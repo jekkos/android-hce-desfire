@@ -28,6 +28,8 @@
 
     <string name="info_save_successful">Data successfully saved</string>
     <string name="info_save_error">Error: Error while saving data</string>
+    <string name="info_load_error">Error: Error while loading data</string>
+    <string name="info_parse_error">Error: Error while loading data</string>
     <string name="action_replace">Replace</string>
 
     <string name="text_open_session_title">Open Session</string>

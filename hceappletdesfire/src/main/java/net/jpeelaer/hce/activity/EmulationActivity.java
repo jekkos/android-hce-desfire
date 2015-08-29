@@ -26,16 +26,19 @@ import android.widget.Toast;
 import net.jpeelaer.hce.R;
 import net.jpeelaer.hce.desfire.DesFireInstruction;
 import net.jpeelaer.hce.desfire.DesfireApplet;
+import net.jpeelaer.hce.desfire.MasterFile;
 import org.kevinvalk.hce.framework.AppletThread;
 import org.kevinvalk.hce.framework.HceFramework;
 import org.kevinvalk.hce.framework.TagWrapper;
 import org.kevinvalk.hce.framework.apdu.Apdu;
 import org.kevinvalk.hce.framework.apdu.CommandApdu;
 import org.yaml.snakeyaml.Yaml;
+import org.yaml.snakeyaml.introspector.BeanAccess;
 
 import javax.crypto.NoSuchPaddingException;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.io.*;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
@@ -81,8 +84,7 @@ public class EmulationActivity extends Activity implements SavableActivity {
 
     };
 
-    private void initFramework() throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException,
-		NoSuchPaddingException, InvalidKeySpecException
+    private void initFramework() throws NoSuchAlgorithmException, NoSuchPaddingException
 	{
 		if (desfireApplet == null) {
 			desfireApplet = new DesfireApplet();
@@ -139,21 +141,22 @@ public class EmulationActivity extends Activity implements SavableActivity {
                     }
                     String prefix = isCommandApdu ? "--> " : "<-- ";
                     String text = prefix + " " + s;
-                    appendColoredText(tv, text, isCommandApdu ? R.color.dark_green : R.color.orange);
+                    appendColoredText(tv, text, isCommandApdu ? R.color.dark_green : R.color.red);
                 }
 
             }
         });
     }
 
-    public void appendColoredText(TextView tv, String text, int color) {
+    public void appendColoredText(TextView tv, String text, int colorCode) {
         int start = tv.getText().length();
         tv.append(text + System.getProperty("line.separator"));
         int end = tv.getText().length();
         Spannable spannableText = (Spannable) tv.getText();
-        ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(getResources().getColor(color));
-        spannableText.setSpan(foregroundColorSpan, start, end,  Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-    }
+        int color = getResources().getColor(colorCode);
+        ForegroundColorSpan foregroundColorSpan = new ForegroundColorSpan(color);
+            spannableText.setSpan(foregroundColorSpan, start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+        }
 
     /**
      * Handle the selected function from the editor menu.
@@ -184,6 +187,19 @@ public class EmulationActivity extends Activity implements SavableActivity {
             case FILE_CHOOSER_DUMP_FILE:
                 if (resultCode == Activity.RESULT_OK) {
                     // reload this screen with data contained in yaml file
+                    String filePath = data.getStringExtra(FileChooserActivity.EXTRA_CHOSEN_FILE);
+                    String fileName = data.getStringExtra(FileChooserActivity.EXTRA_CHOSEN_FILENAME);
+                    File file = new File(filePath, fileName);
+                    try {
+                        FileReader source = new FileReader(file);
+                        Yaml yaml = new Yaml();
+                        MasterFile masterFile = yaml.loadAs(source, MasterFile.class);
+                        desfireApplet.setMasterFile(masterFile);
+                    } catch (FileNotFoundException e) {
+                        Toast.makeText(getBaseContext(), R.string.info_load_error,
+                                Toast.LENGTH_LONG).show();
+                        Log.e(TAG, "File not found: " + file.getName());
+                    }
                 }
                 break;
         }
@@ -217,11 +233,11 @@ public class EmulationActivity extends Activity implements SavableActivity {
             String dateFormatted = fmt.format(calendar.getTime());
             sessionName = "Session-" + dateFormatted;
         }
-
-        Yaml yamlFile = new Yaml();
-        String dump = yamlFile.dump(desfireApplet.getMasterFile());
+        Yaml yaml = new Yaml();
+        String dump = yaml.dump(desfireApplet.getMasterFile());
         saveFile(dump.split(System.getProperty("line.separator")), sessionName, true, R.string.dialog_save_session_title,
                 R.string.dialog_save_session);
+
     }
 
     /**
@@ -286,7 +302,7 @@ public class EmulationActivity extends Activity implements SavableActivity {
     @Override
 	protected void onCreate(Bundle savedInstanceState)
 	{
-		requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
+        requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 
@@ -295,10 +311,13 @@ public class EmulationActivity extends Activity implements SavableActivity {
         
         // Fix adapter settings
         adapter = NfcAdapter.getDefaultAdapter(this);
-        adapter.setNdefPushMessage(null, this);
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN)
-            adapter.setBeamPushUris(null, this);
-        
+        if (adapter != null) {
+            adapter.setNdefPushMessage(null, this);
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.JELLY_BEAN)
+                adapter.setBeamPushUris(null, this);
+        }
+
+
         try {
             // Setup our framework
             initFramework();

@@ -3,4 +3,4 @@ lib/
 libs/
 .gradle/
 .idea/
-*.iml
+*/*.iml

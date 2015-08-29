@@ -25,7 +25,8 @@
             android:textIsSelectable="true" android:layout_gravity="top" android:editable="false"
             android:gravity="left|top" android:lines="20" android:padding="8dp"
             android:singleLine="false" android:textColorHighlight="@color/orange" android:textColorHint="@color/red"
-            android:textSize="16dp" android:typeface="normal"/>
+            android:textSize="16sp" android:typeface="normal"
+            android:backgroundTint="@color/dark_gray"/>
     </ScrollView>
 
 </RelativeLayout>

@@ -1,14 +1,9 @@
 package net.jpeelaer.hce.desfire;
 
-import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
 
 import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.DESKeySpec;
-import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.kevinvalk.hce.framework.IsoException;
@@ -38,6 +33,10 @@ public class DirectoryFile extends File {
     private byte maxKeyNumber;//Maximo numero de claves que se pueden almacenar (aplicaci�n)
     private boolean ISOFileIDSupported;
 
+    public DirectoryFile() {
+        super((byte) 0x00);
+    }
+
     /**
      * Constructor for the Master File
      *
@@ -57,7 +56,7 @@ public class DirectoryFile extends File {
 
         SecretKeyFactory desKeyFactory;
         try {
-            Key newKey = generateSecretKey(Util.DEFAULT_MASTER_KEY);
+            Key newKey = buildKey(Util.DEFAULT_MASTER_KEY);
             masterKey = newKey;
         } catch (Exception e) {
             Log.e("NFC", e.getMessage(), e);
@@ -79,7 +78,7 @@ public class DirectoryFile extends File {
         keyList = new Key[maxKeyNumber];
         byte[] defaultKey = ((MasterFile) getParent()).getDefaultKey();
         // for auth it's des or aes, 8 byte or 16 block size
-        keyList[0] = generateSecretKey(defaultKey);//Application Master Key
+        keyList[0] = buildKey(defaultKey);//Application Master Key
     }
 
     public void setAID(byte[] AID) { }
@@ -137,8 +136,7 @@ public class DirectoryFile extends File {
         return masterKey;
     }
 
-    private Key generateSecretKey(byte[] keyBytes) {
-        KeyFactory secretKeyFactory = null;
+    private Key buildKey(byte[] keyBytes) {
         Key key = null;
         switch (keyType) {
             //La master key puede ser 3DES(16), TKDES(24) o AES(16)
@@ -159,10 +157,10 @@ public class DirectoryFile extends File {
         if (isMasterFile()) { //Si es Master File
             //Segun el keyNumber se decide el tipo de clave que tenemos.
             //FALTA
-            Key newKey = generateSecretKey(keyBytes);
+            Key newKey = buildKey(keyBytes);
             masterKey = newKey;
         } else {//It's not MasterFile
-            Key newKey = generateSecretKey(keyBytes);
+            Key newKey = buildKey(keyBytes);
             keyList[keyNumber] = newKey;
         }
     }

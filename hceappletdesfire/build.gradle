@@ -8,7 +8,6 @@ android {
         applicationId "net.jpeelaer.hce"
         minSdkVersion 19
         targetSdkVersion 21
-        testApplicationId "net.jpeelaer.hce"
         versionCode 1
         versionName "1.0"
     }
@@ -19,12 +18,6 @@ android {
         }
     }
 
-    sourceSets {
-        instrumentTest.setRoot('src/test/java')
-    }
-
-    productFlavors {
-    }
     testOptions {
         unitTests.returnDefaultValues = true
     }
@@ -33,7 +26,7 @@ android {
 
 dependencies {
     compile project(':hceframework')
-    compile 'org.yaml:snakeyaml:1.16'
+    compile 'org.yaml:snakeyaml:1.17-SNAPSHOT:android'
     testCompile 'org.mockito:mockito-all:1.9.5'
     testCompile 'junit:junit:4.12'
     testCompile 'com.google.guava:guava:14.0.1'
