@@ -65,7 +65,7 @@ public class DesfireInstructionTest extends AbstractAppletTest {
         Assert.assertEquals(keySize, encRndB.length);
         byte[] rndB = new byte[keySize];
         Cipher cipher = Cipher.getInstance(algorithm + "/CBC/NoPadding");
-        Key secretKey = new SecretKeySpec(Util.TKDES_DEFAULT, algorithm);
+        Key secretKey = new SecretKeySpec("AES".equals(algorithm) ? Util.AES_DEFAULT : Util.TKDES_DEFAULT, algorithm);
 
         byte[] ivBytes = new byte[keySize];
         Arrays.fill(ivBytes, (byte) 0);
@@ -83,7 +83,9 @@ public class DesfireInstructionTest extends AbstractAppletTest {
         byte[] encRndArndB = new byte[keySize * 2];
 
         // legacy mode = DECRYPT, non legacy = ENCRYPT
-        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
+        boolean legacyMode = instruction == DesFireInstruction.AUTHENTICATE;
+        cipher.init(legacyMode ? Cipher.DECRYPT_MODE : Cipher.ENCRYPT_MODE,
+                secretKey, ivParameterSpec);
         encRndArndB = cipher.doFinal(rndArndB.put(rndA).put(rndB).array());
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(command.length + encRndArndB.length);
@@ -95,6 +97,8 @@ public class DesfireInstructionTest extends AbstractAppletTest {
         // decrypt and assert?
         byte[] encPiccRndA = Util.subByteArray(responseApdu.getBuffer(), (byte) 0, (byte) (keySize - 1));
         byte[] piccRndA = new byte[keySize];
+
+        cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
         piccRndA = cipher.doFinal(encPiccRndA);
         piccRndA = Util.rotateRight(piccRndA);
         assertTrue(Arrays.equals(rndA, piccRndA));
@@ -118,7 +122,7 @@ public class DesfireInstructionTest extends AbstractAppletTest {
 
         when(tagWrapper.isConnected()).thenReturn(true);
         try {
-            when(tagWrapper.transceive(responzeApdu())).thenAnswer(commandApdu());
+            when(tagWrapper.transceive(responseApdu())).thenAnswer(commandApdu());
         } catch (IOException e) {
             Assert.fail();
         }
@@ -136,7 +140,7 @@ public class DesfireInstructionTest extends AbstractAppletTest {
         };
     }
 
-    private byte[] responzeApdu() {
+    private byte[] responseApdu() {
         return Mockito.argThat(new ArgumentMatcher<byte[]>() {
 
             @Override

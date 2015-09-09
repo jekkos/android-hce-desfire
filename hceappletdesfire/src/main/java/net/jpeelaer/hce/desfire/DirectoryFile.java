@@ -66,9 +66,7 @@ public class DirectoryFile extends File {
         ISOFileIDSupported = (keySettings[1] & (byte) 0x10) == (byte) 0x10;
 
         keyList = new Key[maxKeyNumber];
-        byte[] defaultKey = ((MasterFile) getParent()).getDefaultKey();
-        // for auth it's des or aes, 8 byte or 16 block size
-        keyList[0] = buildKey(defaultKey);//Application Master Key
+        keyList[0] = buildKey();
     }
 
     public void setAID(byte[] AID) { }
@@ -124,6 +122,11 @@ public class DirectoryFile extends File {
 
     public Key getMasterKey() {
         return masterKey;
+    }
+
+    private Key buildKey() {
+        // Application Master Key
+        return buildKey(keyType == Util.AES ? Util.AES_DEFAULT : Util.TKDES_DEFAULT);
     }
 
     private Key buildKey(byte[] keyBytes) {
