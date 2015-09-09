@@ -2,6 +2,12 @@ package net.jpeelaer.hce.desfire;
 
 import org.kevinvalk.hce.framework.apdu.CommandApdu;
 import org.kevinvalk.hce.framework.apdu.ResponseApdu;
+import org.mockito.Answers;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.Spy;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
+import org.mockito.stubbing.Answer;
 
 import javax.crypto.NoSuchPaddingException;
 import java.security.NoSuchAlgorithmException;
@@ -11,18 +17,14 @@ import java.util.Arrays;
  * Created by jekkos on 8/27/15.
  */
 public class AbstractAppletTest {
+
+    @Spy
     protected DesfireApplet applet;
 
-    public AbstractAppletTest() throws NoSuchAlgorithmException, NoSuchPaddingException {
-        applet = new DesfireApplet();
-    }
-
-    protected void createApplication () {
+    protected void createApplication (byte keyType) {
         // create directory
         {
-            CommandApdu commandApdu = new CommandApdu(new byte[] {(byte) 0x90, (byte) 0xCA,
-                    0x00, 0x00, 0x05, (byte) 0xF4,
-                    (byte) 0x83, 0x40, 0x00, (byte) 0x8E, 0x00});
+            CommandApdu commandApdu = CommandApdus.parseApdu("90 CA 00 00 05 F4 83 40 00 8E 00");
             ResponseApdu process = applet.process(commandApdu);
             byte[] operationOk = Util.shortToByteArray(Util.OPERATION_OK);
             Arrays.equals(process.getBuffer(), operationOk);
@@ -30,12 +32,18 @@ public class AbstractAppletTest {
 
         // create file
         {
-            CommandApdu commandApdu = new CommandApdu(new byte[] {(byte) 0x90, (byte) 0xCD,
-                    0, 0, 0x07, 0x00, 0x03, 0, 0, 0x10, 0});
+            CommandApdu commandApdu = CommandApdus.parseApdu("90 CD 00 00 07 00 03 00 00 10 00");
             ResponseApdu process = applet.process(commandApdu);
             byte[] operationOk = Util.shortToByteArray(Util.OPERATION_OK);
             Arrays.equals(process.getBuffer(), operationOk);
         }
 
+        // select directory
+        {
+            CommandApdu commandApdu = CommandApdus.parseApdu("90 5A 00 00 03 F4 83 40");
+            ResponseApdu process = applet.process(commandApdu);
+            byte[] operationOk = Util.shortToByteArray(Util.OPERATION_OK);
+            Arrays.equals(process.getBuffer(), operationOk);
+        }
     }
 }

@@ -13,13 +13,9 @@ import java.security.NoSuchAlgorithmException;
  */
 public class SaveRestoreSessionTest extends AbstractAppletTest {
 
-    public SaveRestoreSessionTest() throws NoSuchAlgorithmException, NoSuchPaddingException {
-        super();
-    }
-
     @Test
     public void saveSession() throws IOException {
-        createApplication();
+        createApplication(Util.TKTDES);
 
         Yaml yaml = new Yaml();
         String dump = yaml.dump(applet.getMasterFile());

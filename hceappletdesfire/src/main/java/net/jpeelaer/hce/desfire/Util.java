@@ -1,6 +1,16 @@
 package net.jpeelaer.hce.desfire;
 
 
+import android.util.MutableInt;
+
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.ByteBuffer;
+import java.security.Key;
+import java.util.Arrays;
+import java.util.zip.CRC32;
+import java.util.zip.Checksum;
+
 public class Util {
 
 
@@ -52,9 +62,8 @@ public class Util {
 	 final static byte PLAIN_COMMUNICATION_MAC=(byte)0x01;
 	 final static byte FULLY_ENCRYPTED=(byte)0x02;
 
-	 public final static byte[] DEFAULT_MASTER_KEY={(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,
-			 (byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00,
-			 (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00, (byte) 0x00};
+	 public final static byte[] TKDES_DEFAULT = new byte[24];
+	 public final static byte[] AES_DEFAULT = new byte[16];
 	 // 3DES;	 public final static byte[] RANDOM_A={(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC};
 	 public final static byte[] CHECKSUM_IV={(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00};
 	 
@@ -64,7 +73,10 @@ public class Util {
 	 //Others
 	 public final static byte MAX_DATA_SIZE=100;//MEJORAR ESTE VALOR
 
-	//FALTA
+	{
+		Arrays.fill(TKDES_DEFAULT, (byte) 0x00);
+		Arrays.fill(AES_DEFAULT, (byte) 0x00);
+	}
 
 	public static byte[] rotateLeft(byte[] c){
 		 byte[] c1=new byte[c.length];
@@ -160,9 +172,11 @@ public class Util {
 		return output;
 	}
 
-	public static byte[] createSessionKey(byte[] a,byte[] b, byte keyType) {
-		byte[] result=new byte[16];
+	public static Key createSessionKey(byte[] a,byte[] b, byte keyType) {
+		byte[] result = new byte[16];
+		String algorithm = "DES";
 		if (keyType == Util.TDES) {
+			algorithm = "DESede";
 			result[0]=a[0];
 			result[1]=a[1];
 			result[2]=a[2];
@@ -180,6 +194,7 @@ public class Util {
 			result[14]=b[6];
 			result[15]=b[7];
 		} else if (keyType == Util.AES) {
+			algorithm = "AES";
 			// eerste 4 v byte a en b
 			for (int i = 0; i < 4; i++) {
 				result[i] = a[i];
@@ -195,7 +210,7 @@ public class Util {
 				result[i] = b[i];
 			}
 		}
-		return result;
+		return new SecretKeySpec(result, algorithm);
 	}
 
 
@@ -272,7 +287,13 @@ public class Util {
         }
         return shortToByteArray(crc);
 	}
-	
+
+	public static byte[] crc32(byte[] data) {
+		Checksum checksum = new CRC32();
+		checksum.update(data, 0, data.length);
+		return ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(checksum.getValue()).array();
+	}
+
 	public static boolean byteArrayCompare(byte[]a,byte[] b){
 		if(a.length!=b.length)return false;
 		for (byte i = 0; i < a.length; i++) {

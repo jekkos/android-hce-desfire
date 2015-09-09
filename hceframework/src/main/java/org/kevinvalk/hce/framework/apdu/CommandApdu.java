@@ -44,8 +44,6 @@ public class CommandApdu extends Apdu
 		this(new Apdu(buffer));
 	}
 
-
-	
 	public CommandApdu(Apdu apdu)
 	{
 		try

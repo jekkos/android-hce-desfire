@@ -1,21 +1,17 @@
 package net.jpeelaer.hce.desfire;
 
-import java.beans.PropertyChangeSupport;
-import java.security.*;
-import java.security.spec.InvalidKeySpecException;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
-import javax.crypto.*;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
 import org.kevinvalk.hce.framework.Applet;
 import org.kevinvalk.hce.framework.Iso7816;
 import org.kevinvalk.hce.framework.IsoException;
-import org.kevinvalk.hce.framework.apdu.*;
+import org.kevinvalk.hce.framework.apdu.Apdu;
+import org.kevinvalk.hce.framework.apdu.CommandApdu;
+import org.kevinvalk.hce.framework.apdu.ResponseApdu;
+import org.kevinvalk.hce.framework.apdu.SecureApdu;
 import org.spongycastle.util.Arrays;
 
-import android.util.Log;
+import javax.crypto.*;
+import javax.crypto.spec.IvParameterSpec;
+import java.security.*;
 
 /**
  * DESfire Card operating system's emulation. This class installs the applet
@@ -89,6 +85,10 @@ public class DesfireApplet extends Applet {
      */
     private byte authenticated;
     private byte[] dataBuffer;
+    /**
+     * Check whether the original authenticate was done using 0x0A (legacy)  higher
+     */
+    private boolean legacyMode;
 
 
     /**
@@ -97,11 +97,8 @@ public class DesfireApplet extends Applet {
      * <p/>
      * needs to be protected so that it can be invoked by subclasses
      *
-     * @throws NoSuchPaddingException
-     * @throws NoSuchProviderException
-     * @throws NoSuchAlgorithmException
-     * @throws InvalidKeySpecException
-     * @throws InvalidKeyException
+     * @throws NoSuchPaddingException wrong settingg for encryption padding
+     * @throws NoSuchAlgorithmException unexistant encryption algorithm
      */
     public DesfireApplet() throws NoSuchPaddingException, NoSuchAlgorithmException {
         masterFile = new MasterFile();
@@ -112,7 +109,7 @@ public class DesfireApplet extends Applet {
         keyNumberToAuthenticate = 0;
         authenticated = Util.NO_KEY_AUTHENTICATED;
         securityLevel = Util.PLAIN_COMMUNICATION;
-        AES_CIPHER = Cipher.getInstance("AES/CBC/PKCS5Padding");
+        AES_CIPHER = Cipher.getInstance("AES/CBC/NoPadding");
         DES_CIPHER = Cipher.getInstance("DES/CBC/NoPadding");
         TDES_CIPHER = Cipher.getInstance("DESede/CBC/NoPadding");
     }
@@ -120,59 +117,53 @@ public class DesfireApplet extends Applet {
     /**
      * PICC and reader device show in an encrypted way that they posses the same key.
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
-     * @throws NoSuchAlgorithmException
-     * @throws InvalidKeySpecException
+     * @throws GeneralSecurityException generic security exception
      * @effect Confirms that both entities are permited to do operations on each
      * other and creates a session key.
      * @note This procedure has two parts. depending on the commandToContinue status.
      * @note ||KeyNumber||
      */
-    private ResponseApdu authenticate(Apdu Apdu, byte[] buffer) throws InvalidAlgorithmParameterException, InvalidKeyException,
-            BadPaddingException, ShortBufferException, IllegalBlockSizeException, InvalidKeySpecException, NoSuchAlgorithmException {
+    private ResponseApdu authenticate(CommandApdu apdu, byte[] buffer) throws GeneralSecurityException {
         //Apdu: KeyNo
-
         if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
-            //FIRST MESSAGE
+            legacyMode = apdu.ins == DesFireInstruction.AUTHENTICATE.toByte();
 
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != 1) IsoException.throwIt(Util.LENGTH_ERROR);
             // RndB is generated			
             keyNumberToAuthenticate = buffer[Iso7816.OFFSET_CDATA];
+            int keyLength = deriveKeyLengthForFile(selectedDF, keyNumberToAuthenticate);
             if (!selectedDF.isValidKeyNumber(keyNumberToAuthenticate)) IsoException.throwIt(Util.NO_SUCH_KEY);
-            randomNumberToAuthenticate = new byte[8];
+            randomNumberToAuthenticate = new byte[keyLength];
             SecureRandom sr = new SecureRandom();
             sr.nextBytes(randomNumberToAuthenticate);
-            //Arrays.fill(randomNumberToAuthenticate, (byte) 0);
 
             //Ek(RndB) is created
-            byte[] ekRndB = new byte[8];
+            byte[] ekRndB = new byte[keyLength];
 
-            Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE);
-            cipher.doFinal(randomNumberToAuthenticate, (short) 0, (short) 8, ekRndB, (short) 0);
+            Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE, keyLength);
+            ekRndB = cipher.doFinal(randomNumberToAuthenticate);
             commandToContinue = DesFireInstruction.AUTHENTICATE;
 
             //Ek(RndB) is sent
-            return sendResponse(Apdu, buffer, ekRndB, (byte) 0xAF);
+            return sendResponse(apdu, buffer, ekRndB, (byte) 0xAF);
         } else {
-            //SECCOND MESSAGE 
-            if ((byte) (buffer[Iso7816.OFFSET_LC]) != 16) IsoException.throwIt(Util.LENGTH_ERROR);
+            int keyLength = deriveKeyLengthForFile(selectedDF, keyNumberToAuthenticate);
+            //SECCOND MESSAGE
+            if ((byte) (buffer[Iso7816.OFFSET_LC]) != keyLength * 2) IsoException.throwIt(Util.LENGTH_ERROR);
             commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
-            byte[] encryptedRndA = new byte[8];
-            byte[] encryptedRndArndB = new byte[16];
-            byte[] rndA = new byte[8];
-            byte[] rndB = new byte[8];
-            byte[] rndArndB = new byte[16];
+            byte[] encryptedRndA = new byte[keyLength];
+            byte[] encryptedRndArndB = new byte[keyLength * 2];
+            byte[] rndA = new byte[keyLength];
+            byte[] rndB = new byte[keyLength];
+            byte[] rndArndB = new byte[keyLength * 2];
             //Ek(RndA-RndB') is recieved. RndB' is a 8 bits left-shift of RndB	
-            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + 15));
+            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + keyLength * 2 - 1));
 
-            // decrypt in legacy mode (ins = 0x0A), encrypt otherwise
-            Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE);
-            cipher.doFinal(encryptedRndArndB, (short) 0, (short) 16, rndArndB, (short) 0);
-            rndA = Util.subByteArray(rndArndB, (byte) 0, (byte) 7);
-            rndB = Util.subByteArray(rndArndB, (byte) 8, (byte) 15);
+            // encrypt in legacy mode (ins = 0x0A), encrypt otherwise
+            Cipher cipher = deriveCipherForFile(legacyMode ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, keyLength);
+            rndArndB = cipher.doFinal(encryptedRndArndB);
+            rndA = Util.subByteArray(rndArndB, (byte) 0, (byte) (keyLength - 1));
+            rndB = Util.subByteArray(rndArndB, (byte) (keyLength) , (byte) (keyLength  * 2 - 1));
             rndB = Util.rotateRight(rndB);//Because rndB was left shifted
             //RndB is checked
             if (!Arrays.areEqual(rndB, randomNumberToAuthenticate)) {
@@ -184,28 +175,33 @@ public class DesfireApplet extends Applet {
                 authenticated = keyNumberToAuthenticate;
             }
             //Session key is created
-            byte[] newSessionKey = Util.createSessionKey(rndA, rndB, selectedDF.getMasterKeyType());
+            Key sessionKey = Util.createSessionKey(rndA, rndB, selectedDF.getMasterKeyType());
             // then encrypt session key ??
             //Ek(RndA')is sent back
             rndA = Util.rotateLeft(rndA);
 
-            cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE);
-            cipher.doFinal(rndA, (short) 0, (short) 8, encryptedRndA, (short) 0);
-            return sendResponseAndChangeStatus(Apdu, buffer, encryptedRndA, newSessionKey, cipher.getAlgorithm());
+            cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE, keyLength);
+            encryptedRndA = cipher.doFinal(rndA);
+            return sendResponseAndChangeStatus(apdu, buffer, encryptedRndA, sessionKey);
         }
     }
 
-    private Cipher deriveCipherForFile(int opmode) throws InvalidKeyException, InvalidAlgorithmParameterException {
+    private Cipher deriveCipherForFile(int opmode, int keyLength) throws InvalidKeyException, InvalidAlgorithmParameterException {
         Key key = selectedDF.getMasterKey();
         if (!selectedDF.isMasterFile()) {
             key = selectedDF.getKey(keyNumberToAuthenticate);
         }
         Cipher cipher = deriveCipherFromKey(key);
-        byte[] ivBytes = new byte[8];
+        byte[] ivBytes = new byte[keyLength];
         java.util.Arrays.fill(ivBytes, (byte) 0);
         IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
         cipher.init(opmode, key, ivParameterSpec);
         return cipher;
+    }
+
+    private int deriveKeyLengthForFile(DirectoryFile directoryFile, byte keyNumber) {
+        Key key = directoryFile.getKey(keyNumber);
+        return key.getEncoded().length;
     }
 
     public Cipher deriveCipherFromKey(Key key) {
@@ -251,7 +247,7 @@ public class DesfireApplet extends Applet {
      * @note ||Key number | Ciphered Key Data||
      * 1			24-40
      */
-    private void changeKey(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private void changeKey(Apdu Apdu, byte[] buffer) throws IllegalBlockSizeException, BadPaddingException, ShortBufferException, InvalidKeyException {
 
 
         if (((byte) (buffer[Iso7816.OFFSET_LC]) < 25) && ((byte) (buffer[Iso7816.OFFSET_LC]) > 41))
@@ -331,10 +327,6 @@ public class DesfireApplet extends Applet {
     /**
      * Returns the application identifiers of all applications on a PICC
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      * @note If the number of applications is higher than 19 the command will
      * work in two parts.
      */
@@ -380,13 +372,8 @@ public class DesfireApplet extends Applet {
     /**
      * Get information on the PICC and application master key settings.
      * In addition it returns the maximum number of keys which are configured for the selected application.
-     *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      */
-    private ResponseApdu getKeySettings(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu getKeySettings(Apdu Apdu, byte[] buffer) {
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
         if (!selectedDF.hasGetRights(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
@@ -458,8 +445,8 @@ public class DesfireApplet extends Applet {
         for (byte i = 0; i < encData.length; i++) {
             encData[i] = buffer[(byte) (i + Iso7816.OFFSET_CDATA + 1)];
         }
-        byte[] data = decrypt16(encData, sessionKey);
 
+        byte[] data = decryptBytes(encData, sessionKey);
         //Checks the option
         switch (buffer[Iso7816.OFFSET_CDATA]) {
             case (byte) 0x00: //Configuration byte
@@ -479,19 +466,13 @@ public class DesfireApplet extends Applet {
                 break;
             default:
                 IsoException.throwIt(Util.PARAMETER_ERROR);
-
         }
     }
 
     /**
      * Returns the File Identifiers of all active files within the currently selected application
-     *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      */
-    private ResponseApdu getFileIDs(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu getFileIDs(Apdu Apdu, byte[] buffer) {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
@@ -770,17 +751,13 @@ public class DesfireApplet extends Applet {
     /**
      * Reads data frin Standard Data Files or Backup Data Files
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      * @note The MSB in the 3 bits values is not readed
      * @note This method just send the first (or only) message, if the readed data doesn't fit in one Apdu
      * the system will call the sendBlockData
      * @note || FileNumber | Offset | Length ||
      * 1           3        3
      */
-    private ResponseApdu readData(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu readData(Apdu Apdu, byte[] buffer) {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.READ_DATA.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] != 7))
@@ -937,10 +914,6 @@ public class DesfireApplet extends Applet {
     /**
      * Reads the currently stored value form Value Files
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      * @note || FileN ||
      * 1
      */
@@ -1078,10 +1051,6 @@ public class DesfireApplet extends Applet {
     /**
      * Reads out a set of complete records from a Cyclic or Linear Record File
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      * @note Records are sent in cronological order.
      * @note When data is sent, if the length of the data doesn't fit in one
      * message (59 bytes) the data field is splitted. If more thata will
@@ -1093,7 +1062,7 @@ public class DesfireApplet extends Applet {
      */
 
     //USAR LOS NUEVOS METODOS IMPLEMENTADOS PARA REALIZARLO DE UNA MANERA M�S ELEGANTE
-    private ResponseApdu readRecords(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu readRecords(Apdu Apdu, byte[] buffer) {
         if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 7) IsoException.throwIt(Util.LENGTH_ERROR);
@@ -1297,26 +1266,22 @@ public class DesfireApplet extends Applet {
      * Encrypts the message
      *
      * @return The message encrypted in the following way:
-     * - The CRC16 is calculated
+     * - The CRC is calculated
      * - The whole array is padded
      * - Everything is encyphered
-     * @throws InvalidKeyException
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @note For the moment it only uses 3DES
      */
-    private byte[] encrypt16(byte[] msg, Key key) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
-
-        //CRC16
-        byte[] crc = Util.crc16(msg);//16-bit
-        msg = Util.concatByteArray(msg, crc);
-        //padding
-        msg = Util.preparePaddedByteArray(msg);
-        //Encypher		
-        Cipher cipher = deriveCipherFromKey(key);
-        cipher.init(Cipher.ENCRYPT_MODE, key);
-        cipher.doFinal(msg, (short) 0, (short) msg.length, msg, (short) 0);
+    private byte[] encryptBytes(byte[] msg, Key key) {
+        try {
+            byte[] crc = buildCrc(msg);// 16 or 32 bit
+            msg = Util.concatByteArray(msg, crc);
+            msg = Util.preparePaddedByteArray(msg);
+            Cipher cipher = deriveCipherFromKey(key);
+            cipher.init(Cipher.ENCRYPT_MODE, key);
+            msg = cipher.doFinal(msg);
+        } catch(GeneralSecurityException e) {
+            securityLevel = Util.PLAIN_COMMUNICATION;
+            IsoException.throwIt(Util.INTEGRITY_ERROR);
+        }
         return msg;
     }
 
@@ -1326,10 +1291,9 @@ public class DesfireApplet extends Applet {
      * @return The message decrypted in the following way:
      * - Everything is decyphered
      * - The padding is taken out
-     * - The CRC16 is calculated and compared with the received
-     * @note For the moment it only uses 3DES
+     * - The CRC is calculated and compared with the received
      */
-    private byte[] decrypt16(byte[] encryptedMsg, Key key) {
+    private byte[] decryptBytes(byte[] encryptedMsg, Key key) {
         byte[] msg = new byte[encryptedMsg.length];
         try {
             Cipher cipher = deriveCipherFromKey(key);
@@ -1339,26 +1303,29 @@ public class DesfireApplet extends Applet {
             //Padding out
             byte[] data = Util.removePadding(msg);
             //Checks CRC
-            byte[] receivedCrc = Util.subByteArray(data, (byte) (data.length - 2), (byte) (data.length - 1));
-            data = Util.subByteArray(data, (byte) 0, (byte) (data.length - 3));
-            byte[] newCrc = Util.crc16(data);
+            int bytes = legacyMode ? 4 : 2;
+            byte[] receivedCrc = Util.subByteArray(data, (byte) (data.length - bytes), (byte) (data.length - 1));
+            data = Util.subByteArray(data, (byte) 0, (byte) (data.length - (bytes + 1)));
+            byte[] newCrc = buildCrc(data);
             if (Util.byteArrayCompare(newCrc, receivedCrc) == false) {
                 //We check if there was no padding
-                receivedCrc = Util.subByteArray(msg, (byte) (msg.length - 2), (byte) (msg.length - 1));
-                msg = Util.subByteArray(msg, (byte) 0, (byte) (msg.length - 3));
-                newCrc = Util.crc16(msg);
+                receivedCrc = Util.subByteArray(msg, (byte) (msg.length - bytes), (byte) (msg.length - 1));
+                msg = Util.subByteArray(msg, (byte) 0, (byte) (msg.length - (bytes + 1)));
+                newCrc = buildCrc(msg);
                 if (Util.byteArrayCompare(newCrc, receivedCrc) == false) {
                     securityLevel = Util.PLAIN_COMMUNICATION;
                     IsoException.throwIt(Util.INTEGRITY_ERROR);
                 }
-                return msg;
             }
-            return data;
-        } catch (Exception e) {
+        } catch (GeneralSecurityException e){
             securityLevel = Util.PLAIN_COMMUNICATION;
             IsoException.throwIt(Util.INTEGRITY_ERROR);
         }
-        return null;
+        return msg;
+    }
+
+    private byte[] buildCrc(byte[] data) {
+        return legacyMode ? Util.crc16(data) : Util.crc32(data);
     }
 
     /**
@@ -1370,22 +1337,21 @@ public class DesfireApplet extends Applet {
                 return cData;
             case Util.FULLY_ENCRYPTED:
                 if (cData.length > 0) {
-                    cData = decrypt16(cData, sessionKey);
-                    return cData;
+                    cData = decryptBytes(cData, sessionKey);
                 } else return cData;
-
             default:
                 break;
         }
         return null;
     }
 
-    /**
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
-     */
+    private void receiveAPDU(Apdu apdu) {
+        byte[] buffer = apdu.getBuffer();
+        // Lc tells us the incoming apdu command length
+        byte[] cData = getCData(Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + buffer[Iso7816.OFFSET_LC] - 1)));
+    }
+
+
     private ResponseApdu sendResponse(Apdu Apdu, byte[] buffer, byte[] response) {
         return sendResponse(Apdu, buffer, response, (byte) 0x00);
     }
@@ -1393,10 +1359,6 @@ public class DesfireApplet extends Applet {
     /**
      * Send a response with configurable status word
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      */
     private ResponseApdu sendResponse(Apdu Apdu, byte[] buffer, byte[] response, short status) {
         return sendResponse(Apdu, buffer, response, status, this.securityLevel);
@@ -1405,10 +1367,6 @@ public class DesfireApplet extends Applet {
     /**
      * Send a response with configurable status word and security level
      *
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
-     * @throws InvalidKeyException
      */
     private ResponseApdu sendResponse(Apdu Apdu, byte[] buffer, byte[] response, short status, byte securityLevel) {
         // construct the reply Apdu
@@ -1424,12 +1382,7 @@ public class DesfireApplet extends Applet {
             case Util.PLAIN_COMMUNICATION_MAC:
                 break;
             case Util.FULLY_ENCRYPTED:
-                try {
-                    response = encrypt16(response, sessionKey);
-                } catch (Exception e) {
-                    Log.e("NFC", "Internal error: " + e.getMessage(), e);
-                    IsoException.throwIt(Iso7816.SW_INTERNAL_ERROR);
-                }
+                response = encryptBytes(response, sessionKey);
                 break;
             default:
                 break;
@@ -1445,15 +1398,8 @@ public class DesfireApplet extends Applet {
     /**
      * This is needed for the authentication because the last message should be sended
      * encrypted with the old session key and afterwards the session key should change
-     *
-     * @throws InvalidKeySpecException
-     * @throws InvalidKeyException
-     * @throws NoSuchAlgorithmException
-     * @throws BadPaddingException
-     * @throws IllegalBlockSizeException
-     * @throws ShortBufferException
      */
-    private ResponseApdu sendResponseAndChangeStatus(Apdu Apdu, byte[] buffer, byte[] response, byte[] newSessionKey, String algorithm) throws InvalidKeyException, InvalidKeySpecException, NoSuchAlgorithmException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu sendResponseAndChangeStatus(Apdu Apdu, byte[] buffer, byte[] response, Key newSessionKey) {
 
         // construct the reply Apdu
         //short le = Apdu.setOutgoing();
@@ -1467,37 +1413,18 @@ public class DesfireApplet extends Applet {
             case Util.PLAIN_COMMUNICATION_MAC:
                 break;
             case Util.FULLY_ENCRYPTED:
-                response = encrypt16(response, sessionKey);
+                response = encryptBytes(response, sessionKey);
                 break;
             default:
                 break;
         }
 
-        sessionKey = new SecretKeySpec(newSessionKey, algorithm);
+        sessionKey = newSessionKey;
         securityLevel = Util.FULLY_ENCRYPTED;
-        //Apdu.setOutgoingLength( (short) response.length );
         for (byte i = 0; i < response.length; i++) {
             buffer[i] = response[i];
         }
         return new ResponseApdu(buffer, response.length);
-        //Apdu.sendBytes ( (short)0 , (short)response.length );
-    }
-
-    /**
-     * Initialize the applet when it is selected, select always
-     * has to happen after a reset
-     */
-    public boolean select(boolean appInstAlreadyActive) {
-        clear();
-        return true;
-    }
-
-    /**
-     * Perform any cleanup tasks before the applet is deselected
-     */
-    public void deselect(boolean appInstStillActive) {
-        clear();
-        return;
     }
 
     /**
@@ -1537,11 +1464,10 @@ public class DesfireApplet extends Applet {
      * - Encipher using he current session key
      * - The blocks are chained in CRC send mode.
      */
-    public byte[] decryptEncipheredKeyData(byte[] encipheredData, byte keyN) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    public byte[] decryptEncipheredKeyData(byte[] encipheredData, byte keyN) throws InvalidKeyException, BadPaddingException, ShortBufferException, IllegalBlockSizeException {
 
         if (keyN == authenticated) {
-            // FIXME is this the correct key in this case?
-            return decrypt16(encipheredData, sessionKey);
+            return decryptBytes(encipheredData, sessionKey);
         } else {
             //Decrypt
             Cipher cipher = deriveCipherFromKey(sessionKey);
@@ -1551,6 +1477,7 @@ public class DesfireApplet extends Applet {
 
             //Padding out
             byte[] data = Util.removePadding(unpaddedData);
+
 
             //Checks CRC
             byte[] receivedNewKeyCrc = Util.subByteArray(data, (byte) (data.length - 2), (byte) (data.length - 1));
@@ -1607,7 +1534,7 @@ public class DesfireApplet extends Applet {
      * @throws ShortBufferException
      * @throws InvalidKeyException
      */
-    private ResponseApdu sendBlockResponse(Apdu Apdu, byte[] buffer, byte[] data, short offset, byte securityLevel) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
+    private ResponseApdu sendBlockResponse(Apdu Apdu, byte[] buffer, byte[] data, short offset, byte securityLevel) {
         if ((short) (offset + Util.MAX_DATA_SIZE) < data.length) {
             this.offset = (short) (offset + Util.MAX_DATA_SIZE);
             return sendResponse(Apdu, buffer, Util.subByteArray(data, offset, (short) (offset + Util.MAX_DATA_SIZE - 1)), DesFireInstruction.CONTINUE.toByte(), securityLevel);

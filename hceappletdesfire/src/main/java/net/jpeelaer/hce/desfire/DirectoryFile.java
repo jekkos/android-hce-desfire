@@ -1,14 +1,10 @@
 package net.jpeelaer.hce.desfire;
 
 import java.security.Key;
-import java.security.KeyFactory;
 
-import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.SecretKeySpec;
 
 import org.kevinvalk.hce.framework.IsoException;
-
-import android.util.Log;
 
 //El Directory File equivale a la aplicaci�n. 
 
@@ -30,7 +26,7 @@ public class DirectoryFile extends File {
     private boolean masterNotNeededForManage;//Para crear/eliminar (1-No hace falta Ath)
     private boolean masterNotNeededForCheck;//Para commandos get (1-No hace falta Ath)
     private boolean masterChangeable;//0-MK inmovil 1-MK cambiable (Es precisa la Master Key correspondiente)
-    private byte maxKeyNumber;//Maximo numero de claves que se pueden almacenar (aplicaci�n)
+    private int maxKeyNumber;//Maximo numero de claves que se pueden almacenar (aplicaci�n)
     private boolean ISOFileIDSupported;
 
     public DirectoryFile() {
@@ -54,15 +50,9 @@ public class DirectoryFile extends File {
         //La master key puede ser 3DES(16), TKDES(24) o AES(16)
         keyType = Util.TDES;
 
-        SecretKeyFactory desKeyFactory;
-        try {
-            Key newKey = buildKey(Util.DEFAULT_MASTER_KEY);
-            masterKey = newKey;
-        } catch (Exception e) {
-            Log.e("NFC", e.getMessage(), e);
-        }
-        maxKeyNumber = -1;
-
+        Key newKey = buildKey(Util.TKDES_DEFAULT);
+        masterKey = newKey;
+        maxKeyNumber = 0;
     }
 
     /**
@@ -72,7 +62,7 @@ public class DirectoryFile extends File {
         super(fid, parent);//llama al constructor de la clase File
         changeKeySettings(keySettings[0]);
         keyType = (byte) (keySettings[1] & 0xF0);
-        maxKeyNumber = (byte) (keySettings[1] & (byte) 0x0F);
+        maxKeyNumber = keySettings[1] & 0x0F;
         ISOFileIDSupported = (keySettings[1] & (byte) 0x10) == (byte) 0x10;
 
         keyList = new Key[maxKeyNumber];

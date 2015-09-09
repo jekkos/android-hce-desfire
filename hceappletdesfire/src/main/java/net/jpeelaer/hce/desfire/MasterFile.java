@@ -1,14 +1,8 @@
 package net.jpeelaer.hce.desfire;
 
 
-import net.jpeelaer.hce.desfire.Util;
-
 import org.kevinvalk.hce.framework.IsoException;
 import org.spongycastle.util.Arrays;
-
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.spec.InvalidKeySpecException;
 
 
 public class MasterFile extends DirectoryFile {
@@ -52,7 +46,7 @@ public class MasterFile extends DirectoryFile {
         byte[] AID = {(byte) 0xF4, (byte) 0x01, (byte) 0x10};
         indexDF.writeRecord((short) 0, AID);
         arrayDF = new DirectoryFile[28];
-        defaultKeyBytes = Util.DEFAULT_MASTER_KEY;
+        defaultKeyBytes = Util.TKDES_DEFAULT;
     }
 
     public byte[] getDefaultKey() {
