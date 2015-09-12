@@ -187,17 +187,21 @@ public class DesfireApplet extends Applet {
         }
     }
 
-    private Cipher cipherForSelectedFile(int opmode) throws InvalidKeyException, InvalidAlgorithmParameterException {
+    private Cipher cipherForSelectedFile(int opMode) throws InvalidAlgorithmParameterException, InvalidKeyException {
+        DesfireKey keyType = selectedDF.getKeyType();
+        byte[] ivBytes = new byte[keyType.blockSize()];
+        java.util.Arrays.fill(ivBytes, (byte) 0);
+        return cipherForSelectedFile(opMode, ivBytes);
+    }
+
+    private Cipher cipherForSelectedFile(int opMode,  byte[] ivBytes) throws InvalidKeyException, InvalidAlgorithmParameterException {
         Key key = selectedDF.getParent().getMasterKey();
         if (!selectedDF.isMasterFile()) {
             key = selectedDF.getKey(keyNumberToAuthenticate);
         }
         Cipher cipher = deriveCipherFromKey(key);
-        DesfireKey keyType = selectedDF.getKeyType();
-        byte[] ivBytes = new byte[keyType.blockSize()];
-        java.util.Arrays.fill(ivBytes, (byte) 0);
         IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
-        cipher.init(opmode, key, ivParameterSpec);
+        cipher.init(opMode, key, ivParameterSpec);
         return cipher;
     }
 
@@ -1272,7 +1276,7 @@ public class DesfireApplet extends Applet {
      * - The whole array is padded
      * - Everything is encyphered
      */
-    private byte[] encryptBytes(byte[] msg, Key key) {
+    public byte[] encryptBytes(byte[] msg, Key key) {
         try {
             byte[] crc = buildCrc(msg);// 16 or 32 bit
             msg = Util.concatByteArray(msg, crc);
@@ -1313,7 +1317,7 @@ public class DesfireApplet extends Applet {
                 //We check if there was no padding
                 receivedCrc = Util.subByteArray(msg, (byte) (msg.length - bytes), (byte) (msg.length - 1));
                 msg = Util.subByteArray(msg, (byte) 0, (byte) (msg.length - (bytes + 1)));
-                newCrc = buildCrc(msg);
+                newCrc = buildCrc(legacyMode ? Util.getCData(data) : data);
                 if (Util.byteArrayCompare(newCrc, receivedCrc) == false) {
                     securityLevel = Util.PLAIN_COMMUNICATION;
                     IsoException.throwIt(Util.INTEGRITY_ERROR);
@@ -1333,14 +1337,14 @@ public class DesfireApplet extends Applet {
     /**
      * Returns the plain data of the Apdu
      */
-    private byte[] getCData(byte[] cData) {
+    private byte[] getCData(byte[] buffer) {
         switch (this.securityLevel) {
             case Util.PLAIN_COMMUNICATION:
-                return cData;
+                return Util.getCData(buffer);
             case Util.FULLY_ENCRYPTED:
-                if (cData.length > 0) {
-                    cData = decryptBytes(cData, sessionKey);
-                } else return cData;
+                if (buffer.length > 0) {
+                    buffer = decryptBytes(buffer, sessionKey);
+                } else return buffer;
             default:
                 break;
         }
@@ -1349,8 +1353,7 @@ public class DesfireApplet extends Applet {
 
     private void receiveAPDU(Apdu apdu) {
         byte[] buffer = apdu.getBuffer();
-        // Lc tells us the incoming apdu command length
-        byte[] cData = getCData(Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + buffer[Iso7816.OFFSET_LC] - 1)));
+        byte[] cData = getCData(buffer);
     }
 
 

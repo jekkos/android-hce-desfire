@@ -1,8 +1,14 @@
 package net.jpeelaer.hce.desfire;
 
 
+import org.kevinvalk.hce.framework.Iso7816;
+
 import javax.crypto.spec.SecretKeySpec;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.Key;
 import java.util.Arrays;
 import java.util.zip.CRC32;
@@ -230,6 +236,12 @@ public class Util {
 		return result;
 	}
 
+	public static byte[] getCData(byte[] input) {
+		byte[] result = new byte[input[Iso7816.OFFSET_CDATA]];
+		ByteBuffer.allocate(input.length).put(input).get(result, Iso7816.OFFSET_CDATA, input[Iso7816.OFFSET_CDATA]);
+		return result;
+	}
+
 	public static short max(short a, short b) {
 		if(a>b)return a;
 		if(a<b)return b;
@@ -279,9 +291,10 @@ public class Util {
 	}
 
 	public static byte[] crc32(byte[] data) {
-		Checksum checksum = new CRC32();
-		checksum.update(data, 0, data.length);
-		return ByteBuffer.allocate(Long.SIZE / Byte.SIZE).putLong(checksum.getValue()).array();
+		CRC32 x = new CRC32();
+		x.update(data);
+		int result = (int) ~x.getValue() & 0xFFFFFFFF;
+		return ByteBuffer.allocate(4).putInt((int) result).array();
 	}
 
 	public static boolean byteArrayCompare(byte[]a,byte[] b){
