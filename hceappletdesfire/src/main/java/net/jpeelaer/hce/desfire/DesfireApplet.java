@@ -131,39 +131,40 @@ public class DesfireApplet extends Applet {
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != 1) IsoException.throwIt(Util.LENGTH_ERROR);
             // RndB is generated			
             keyNumberToAuthenticate = buffer[Iso7816.OFFSET_CDATA];
-            int keyLength = deriveKeyLengthForFile(selectedDF, keyNumberToAuthenticate);
             if (!selectedDF.isValidKeyNumber(keyNumberToAuthenticate)) IsoException.throwIt(Util.NO_SUCH_KEY);
-            randomNumberToAuthenticate = new byte[keyLength];
+            DesfireKey keyType = selectedDF.getKeyType();
+            int randomBlockSize = keyType.randomBlockSize();
+            randomNumberToAuthenticate = new byte[randomBlockSize];
             SecureRandom sr = new SecureRandom();
             sr.nextBytes(randomNumberToAuthenticate);
 
             //Ek(RndB) is created
-            byte[] ekRndB = new byte[keyLength];
-
-            Cipher cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE, keyLength);
+            byte[] ekRndB = new byte[randomBlockSize];
+            Cipher cipher = cipherForSelectedFile(Cipher.ENCRYPT_MODE);
             ekRndB = cipher.doFinal(randomNumberToAuthenticate);
             commandToContinue = DesFireInstruction.AUTHENTICATE;
 
             //Ek(RndB) is sent
             return sendResponse(apdu, buffer, ekRndB, (byte) 0xAF);
         } else {
-            int keyLength = deriveKeyLengthForFile(selectedDF, keyNumberToAuthenticate);
+            DesfireKey keyType = selectedDF.getKeyType();
+            int randomBlockSize = keyType.randomBlockSize();
             //SECCOND MESSAGE
-            if ((byte) (buffer[Iso7816.OFFSET_LC]) != keyLength * 2) IsoException.throwIt(Util.LENGTH_ERROR);
+            if ((byte) (buffer[Iso7816.OFFSET_LC]) != randomBlockSize * 2) IsoException.throwIt(Util.LENGTH_ERROR);
             commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
-            byte[] encryptedRndA = new byte[keyLength];
-            byte[] encryptedRndArndB = new byte[keyLength * 2];
-            byte[] rndA = new byte[keyLength];
-            byte[] rndB = new byte[keyLength];
-            byte[] rndArndB = new byte[keyLength * 2];
-            //Ek(RndA-RndB') is recieved. RndB' is a 8 bits left-shift of RndB	
-            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + keyLength * 2 - 1));
+            byte[] encryptedRndA = new byte[randomBlockSize];
+            byte[] encryptedRndArndB = new byte[randomBlockSize * 2];
+            byte[] rndA = new byte[randomBlockSize];
+            byte[] rndB = new byte[randomBlockSize];
+            byte[] rndArndB = new byte[randomBlockSize * 2];
+            //Ek(RndA-RndB') is recieved. RndB' is a 8 bits left-shift of RndB
+            encryptedRndArndB = Util.subByteArray(buffer, (byte) Iso7816.OFFSET_CDATA, (byte) (Iso7816.OFFSET_CDATA + randomBlockSize * 2 - 1));
 
             // encrypt in legacy mode (ins = 0x0A), encrypt otherwise
-            Cipher cipher = deriveCipherForFile(legacyMode ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE, keyLength);
+            Cipher cipher = cipherForSelectedFile(legacyMode ? Cipher.ENCRYPT_MODE : Cipher.DECRYPT_MODE);
             rndArndB = cipher.doFinal(encryptedRndArndB);
-            rndA = Util.subByteArray(rndArndB, (byte) 0, (byte) (keyLength - 1));
-            rndB = Util.subByteArray(rndArndB, (byte) (keyLength) , (byte) (keyLength  * 2 - 1));
+            rndA = Util.subByteArray(rndArndB, (byte) 0, (byte) (randomBlockSize - 1));
+            rndB = Util.subByteArray(rndArndB, (byte) (randomBlockSize) , (byte) (randomBlockSize  * 2 - 1));
             rndB = Util.rotateRight(rndB);//Because rndB was left shifted
             //RndB is checked
             if (!Arrays.areEqual(rndB, randomNumberToAuthenticate)) {
@@ -175,24 +176,25 @@ public class DesfireApplet extends Applet {
                 authenticated = keyNumberToAuthenticate;
             }
             //Session key is created
-            Key sessionKey = Util.createSessionKey(rndA, rndB, selectedDF.getMasterKeyType());
+            Key sessionKey = keyType.buildSessionKey(rndA, rndB);
             // then encrypt session key ??
             //Ek(RndA')is sent back
             rndA = Util.rotateLeft(rndA);
 
-            cipher = deriveCipherForFile(Cipher.ENCRYPT_MODE, keyLength);
+            cipher = cipherForSelectedFile(Cipher.ENCRYPT_MODE);
             encryptedRndA = cipher.doFinal(rndA);
             return sendResponseAndChangeStatus(apdu, buffer, encryptedRndA, sessionKey);
         }
     }
 
-    private Cipher deriveCipherForFile(int opmode, int keyLength) throws InvalidKeyException, InvalidAlgorithmParameterException {
-        Key key = selectedDF.getMasterKey();
+    private Cipher cipherForSelectedFile(int opmode) throws InvalidKeyException, InvalidAlgorithmParameterException {
+        Key key = selectedDF.getParent().getMasterKey();
         if (!selectedDF.isMasterFile()) {
             key = selectedDF.getKey(keyNumberToAuthenticate);
         }
         Cipher cipher = deriveCipherFromKey(key);
-        byte[] ivBytes = new byte[keyLength];
+        DesfireKey keyType = selectedDF.getKeyType();
+        byte[] ivBytes = new byte[keyType.blockSize()];
         java.util.Arrays.fill(ivBytes, (byte) 0);
         IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
         cipher.init(opmode, key, ivParameterSpec);
@@ -415,10 +417,10 @@ public class DesfireApplet extends Applet {
      * The PICC Master Keyand the PICC Master Key settings keep their currently set values
      */
     private void formatPICC(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (!selectedDF.isMasterFile()) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
-        if (masterFile.isFormatEnabled() == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (!masterFile.isFormatEnabled()) IsoException.throwIt(Util.PERMISSION_DENIED);
         if (authenticated != 0) IsoException.throwIt(Util.PERMISSION_DENIED);
         masterFile.format();
         IsoException.throwIt(Util.OPERATION_OK);

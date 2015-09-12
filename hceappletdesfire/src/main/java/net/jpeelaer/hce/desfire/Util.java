@@ -1,9 +1,6 @@
 package net.jpeelaer.hce.desfire;
 
 
-import android.util.MutableInt;
-
-import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.Key;
@@ -45,12 +42,12 @@ public class Util {
 	
 	public final static byte[] masterFileAID = {(byte)0x00,(byte)0x00,(byte)0x00};
 	
-	//Key types
+	 // crypto operations
 	 final static byte TDES = (byte) 0x00;
 	 final static byte TKTDES = (byte) 0x40;
 	 final static byte AES = (byte) 0x80;
 
-	 //File types 
+	 //File types
 	 final static byte STANDARD_DATA_FILE=(byte)0x0;
 	 final static byte BACKUP_DATA_FILE=(byte)0X01;
 	 final static byte VALUE_FILE=(byte)0x02;
@@ -62,8 +59,6 @@ public class Util {
 	 final static byte PLAIN_COMMUNICATION_MAC=(byte)0x01;
 	 final static byte FULLY_ENCRYPTED=(byte)0x02;
 
-	 public final static byte[] TKDES_DEFAULT = new byte[24];
-	 public final static byte[] AES_DEFAULT = new byte[16];
 	 // 3DES;	 public final static byte[] RANDOM_A={(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC,(byte)0xBB,(byte)0xCC};
 	 public final static byte[] CHECKSUM_IV={(byte) 0x00,(byte) 0x00,(byte) 0x00,(byte) 0x00};
 	 
@@ -72,11 +67,6 @@ public class Util {
 	 
 	 //Others
 	 public final static byte MAX_DATA_SIZE=100;//MEJORAR ESTE VALOR
-
-	{
-		Arrays.fill(TKDES_DEFAULT, (byte) 0x00);
-		Arrays.fill(AES_DEFAULT, (byte) 0x00);
-	}
 
 	public static byte[] rotateLeft(byte[] c){
 		 byte[] c1=new byte[c.length];
@@ -175,7 +165,7 @@ public class Util {
 	public static Key createSessionKey(byte[] a,byte[] b, byte keyType) {
 		byte[] result = new byte[16];
 		String algorithm = "DES";
-		if (keyType == Util.TDES) {
+		if (keyType == Util.TKTDES) {
 			algorithm = "DESede";
 			result[0]=a[0];
 			result[1]=a[1];

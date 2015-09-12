@@ -17,7 +17,6 @@ import org.mockito.stubbing.Answer;
 
 import javax.crypto.Cipher;
 import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -26,6 +25,7 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.List;
 
+import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertTrue;
 import static org.mockito.Mockito.*;
 
@@ -45,42 +45,42 @@ public class DesfireInstructionTest extends AbstractAppletTest {
     @Test
     public void testDesfireLegacyAuthenticate() throws GeneralSecurityException {
         // first setup master file
-        createApplication(Util.TKTDES);
+        createApplication(Util.TDES);
 
-        authenticate(8, "DESede", DesFireInstruction.AUTHENTICATE);
+        authenticate(DesfireKey.TDES, DesFireInstruction.AUTHENTICATE);
 
         // add 3 more keys to application
         // change master key .. 6..41 = enciphered new key? .. will need to follow (if authenticated it can be readily decrypted)
         CommandApdu commandApdu = new CommandApdu(new byte[] {(byte) 0x90, DesFireInstruction.CHANGE_KEY.toByte(), 0, 0, 41, 0});
-
     }
 
-    private void authenticate(int keySize, String algorithm, DesFireInstruction instruction) throws GeneralSecurityException {
+    private void authenticate(DesfireKey desfireKey, DesFireInstruction instruction) throws GeneralSecurityException {
         // authenticate key 0 (old style)
         CommandApdu authenticateCommmand = new CommandApdu(new byte[] {(byte) 0x90, instruction.toByte(), 0, 0, 1, 0});
         ResponseApdu responseApdu = applet.process(authenticateCommmand);
         byte[] buffer = responseApdu.getBuffer();
-        Assert.assertEquals(keySize + 2, buffer.length);
+        int blockSize = desfireKey.randomBlockSize();
+        assertEquals(blockSize + 2, buffer.length);
         byte[] encRndB = Util.subByteArray(buffer, (short) 0, (short) (buffer.length - 3));
-        Assert.assertEquals(keySize, encRndB.length);
-        byte[] rndB = new byte[keySize];
-        Cipher cipher = Cipher.getInstance(algorithm + "/CBC/NoPadding");
-        Key secretKey = new SecretKeySpec("AES".equals(algorithm) ? Util.AES_DEFAULT : Util.TKDES_DEFAULT, algorithm);
+        assertEquals(blockSize, encRndB.length);
+        byte[] rndB = new byte[blockSize];
+        Cipher cipher = Cipher.getInstance(desfireKey.algorithm() + "/CBC/NoPadding");
+        Key secretKey = desfireKey.buildDefaultKey();
 
-        byte[] ivBytes = new byte[keySize];
+        byte[] ivBytes = new byte[desfireKey.blockSize()];
         Arrays.fill(ivBytes, (byte) 0);
         IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
         rndB = cipher.doFinal(encRndB);
 
         SecureRandom random = new SecureRandom();
-        byte[] rndA = new byte[keySize];
+        byte[] rndA = new byte[blockSize];
         random.nextBytes(rndA);
-        byte[] command = new byte[] {(byte) 0x90, (byte) 0xAF, 0, 0,(byte) (keySize * 2)};
-        ByteBuffer rndArndB = ByteBuffer.allocate(keySize * 2);
+        byte[] command = new byte[] {(byte) 0x90, (byte) 0xAF, 0, 0,(byte) (blockSize * 2)};
+        ByteBuffer rndArndB = ByteBuffer.allocate(blockSize * 2);
         rndB = Util.rotateLeft(rndB);
 
-        byte[] encRndArndB = new byte[keySize * 2];
+        byte[] encRndArndB = new byte[blockSize * 2];
 
         // legacy mode = DECRYPT, non legacy = ENCRYPT
         boolean legacyMode = instruction == DesFireInstruction.AUTHENTICATE;
@@ -95,8 +95,9 @@ public class DesfireInstructionTest extends AbstractAppletTest {
         authenticateCommmand = new CommandApdu(byteBuffer.array());
         responseApdu = applet.process(authenticateCommmand);
         // decrypt and assert?
-        byte[] encPiccRndA = Util.subByteArray(responseApdu.getBuffer(), (byte) 0, (byte) (keySize - 1));
-        byte[] piccRndA = new byte[keySize];
+        assertTrue(responseApdu.data.length > 2);
+        byte[] encPiccRndA = Util.subByteArray(responseApdu.getBuffer(), (byte) 0, (byte) (blockSize - 1));
+        byte[] piccRndA = new byte[blockSize];
 
         cipher.init(Cipher.DECRYPT_MODE, secretKey, ivParameterSpec);
         piccRndA = cipher.doFinal(encPiccRndA);
@@ -108,7 +109,7 @@ public class DesfireInstructionTest extends AbstractAppletTest {
     public void testDesfireAuthenticate() throws GeneralSecurityException{
         createApplication(Util.AES);
 
-        authenticate(16, "AES", DesFireInstruction.AUTHENTICATE_AES);
+        authenticate(DesfireKey.AES, DesFireInstruction.AUTHENTICATE_AES);
     }
 
 

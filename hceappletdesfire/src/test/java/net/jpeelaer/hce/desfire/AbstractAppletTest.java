@@ -24,7 +24,8 @@ public class AbstractAppletTest {
     protected void createApplication (byte keyType) {
         // create directory
         {
-            CommandApdu commandApdu = CommandApdus.parseApdu("90 CA 00 00 05 F4 83 40 00 8E 00");
+            String bytes = String.format("%02X", (keyType & 0xFF) | 0x03);
+            CommandApdu commandApdu = CommandApdus.parseApdu("90 CA 00 00 05 F4 83 40 00 " + bytes + " 00");
             ResponseApdu process = applet.process(commandApdu);
             byte[] operationOk = Util.shortToByteArray(Util.OPERATION_OK);
             Arrays.equals(process.getBuffer(), operationOk);

@@ -46,7 +46,7 @@ public class MasterFile extends DirectoryFile {
         byte[] AID = {(byte) 0xF4, (byte) 0x01, (byte) 0x10};
         indexDF.writeRecord((short) 0, AID);
         arrayDF = new DirectoryFile[28];
-        defaultKeyBytes = Util.TKDES_DEFAULT;
+        defaultKeyBytes = DesfireKey.TDES.defaultKey();
     }
 
     public byte[] getDefaultKey() {
@@ -79,7 +79,8 @@ public class MasterFile extends DirectoryFile {
      */
     public byte searchAID(byte[] AID) {
         for (byte i = 0; i < indexDF.size; i++) {
-            if (Arrays.areEqual(AID, indexDF.readValue(i))) return (i);
+            if (Arrays.areEqual(AID, indexDF.readValue(i)))
+                return (i);
         }
         return ((byte) -1); //if no mismatch
     }

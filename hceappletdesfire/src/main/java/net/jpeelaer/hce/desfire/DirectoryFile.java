@@ -1,10 +1,8 @@
 package net.jpeelaer.hce.desfire;
 
-import java.security.Key;
-
-import javax.crypto.spec.SecretKeySpec;
-
 import org.kevinvalk.hce.framework.IsoException;
+
+import java.security.Key;
 
 //El Directory File equivale a la aplicaci�n. 
 
@@ -18,7 +16,7 @@ public class DirectoryFile extends File {
     private Key[] keyList;
     private byte numberFiles = 0;
     private Key masterKey;
-    private byte keyType;
+    private DesfireKey keyType;
 
     //Key Settings
     private byte changeKeyAccessRights;//que clave es precisa para cambiar una clave (nivel App)
@@ -48,10 +46,7 @@ public class DirectoryFile extends File {
         masterNotNeededForCheck = true;
         masterChangeable = true;
         //La master key puede ser 3DES(16), TKDES(24) o AES(16)
-        keyType = Util.TDES;
-
-        Key newKey = buildKey(Util.TKDES_DEFAULT);
-        masterKey = newKey;
+        masterKey = DesfireKey.TDES.buildDefaultKey();
         maxKeyNumber = 0;
     }
 
@@ -61,12 +56,12 @@ public class DirectoryFile extends File {
     protected DirectoryFile(byte fid, byte[] keySettings, DirectoryFile parent) {
         super(fid, parent);//llama al constructor de la clase File
         changeKeySettings(keySettings[0]);
-        keyType = (byte) (keySettings[1] & 0xF0);
+        keyType = DesfireKey.parse((byte) (keySettings[1] & 0xF0));
         maxKeyNumber = keySettings[1] & 0x0F;
         ISOFileIDSupported = (keySettings[1] & (byte) 0x10) == (byte) 0x10;
 
         keyList = new Key[maxKeyNumber];
-        keyList[0] = buildKey();
+        keyList[0] = keyType.buildDefaultKey();
     }
 
     public void setAID(byte[] AID) { }
@@ -120,29 +115,12 @@ public class DirectoryFile extends File {
         return (keyList[keyNumber]);
     }
 
+    public DesfireKey getKeyType() {
+        return keyType;
+    }
+
     public Key getMasterKey() {
         return masterKey;
-    }
-
-    private Key buildKey() {
-        // Application Master Key
-        return buildKey(keyType == Util.AES ? Util.AES_DEFAULT : Util.TKDES_DEFAULT);
-    }
-
-    private Key buildKey(byte[] keyBytes) {
-        Key key = null;
-        switch (keyType) {
-            //La master key puede ser 3DES(16), TKDES(24) o AES(16)
-            case Util.AES: {
-                key = new SecretKeySpec(keyBytes, "AES");
-                break;
-            }
-            case Util.TDES:
-            case Util.TKTDES: {
-                key = new SecretKeySpec(keyBytes, "DESede");
-            }
-        }
-        return key;
     }
 
     public void changeKey(byte keyNumber, byte[] keyBytes) {
@@ -150,16 +128,16 @@ public class DirectoryFile extends File {
         if (isMasterFile()) { //Si es Master File
             //Segun el keyNumber se decide el tipo de clave que tenemos.
             //FALTA
-            Key newKey = buildKey(keyBytes);
+            Key newKey = keyType.buildKey(keyBytes);
             masterKey = newKey;
         } else {//It's not MasterFile
-            Key newKey = buildKey(keyBytes);
+            Key newKey = keyType.buildKey(keyBytes);
             keyList[keyNumber] = newKey;
         }
     }
 
-    public byte getMasterKeyType() {
-        return keyType;
+    public DesfireKey getMasterKeyType() {
+        return getParent().getKeyType();
     }
 
     public boolean hasChangeAccess(byte keyNAuthenticated, byte keyNToChange) {
@@ -246,7 +224,7 @@ public class DirectoryFile extends File {
     public byte getKeyNumber() {
         byte kn = 0;
         if (getFileID() == (byte) 0x00) return (byte) 0x01;
-        kn = (byte) (keyType << 6);
+        kn = (byte) (keyType.cryptoMethod() << 6);
         kn = (byte) (kn | maxKeyNumber);
         return kn;
     }
