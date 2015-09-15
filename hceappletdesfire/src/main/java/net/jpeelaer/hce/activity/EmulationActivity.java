@@ -188,8 +188,7 @@ public class EmulationActivity extends Activity implements SavableActivity {
                 if (resultCode == Activity.RESULT_OK) {
                     // reload this screen with data contained in yaml file
                     String filePath = data.getStringExtra(FileChooserActivity.EXTRA_CHOSEN_FILE);
-                    String fileName = data.getStringExtra(FileChooserActivity.EXTRA_CHOSEN_FILENAME);
-                    File file = new File(filePath, fileName);
+                    File file = new File(filePath);
                     try {
                         FileReader source = new FileReader(file);
                         Yaml yaml = new Yaml();
@@ -208,13 +207,27 @@ public class EmulationActivity extends Activity implements SavableActivity {
     private void loadSession() {
         // send out activity.. fetch result back
         Intent intent = new Intent(this, FileChooserActivity.class);
-        intent.putExtra(FileChooserActivity.EXTRA_DIR, ActivityUtil.HOME_DIR);
         intent.putExtra(FileChooserActivity.EXTRA_TITLE,
                 getString(R.string.text_open_session_title));
         intent.putExtra(FileChooserActivity.EXTRA_BUTTON_TEXT,
                 getString(R.string.action_open_dump_file));
+        intent.putExtra(FileChooserActivity.EXTRA_CHOOSER_TEXT, R.string.text_chooser_info_text);
         intent.putExtra(FileChooserActivity.EXTRA_ENABLE_DELETE_FILE, true);
+        String storagePath = Environment.getExternalStoragePublicDirectory(ActivityUtil.HOME_DIR).getAbsolutePath();
+        intent.putExtra(FileChooserActivity.EXTRA_DIR, storagePath);
         startActivityForResult(intent, FILE_CHOOSER_DUMP_FILE);
+    }
+
+    private void createHomeDirectories() {
+        // Create dumps directory.
+        File path = new File(Environment.getExternalStoragePublicDirectory(
+                ActivityUtil.HOME_DIR) + "/");
+        if (!path.exists() && !path.mkdirs()) {
+            // Could not create directory.
+            Log.e(TAG, "Error while creating '" + ActivityUtil.HOME_DIR
+                    + " directory.");
+            return;
+        }
     }
 
     /**
@@ -317,6 +330,8 @@ public class EmulationActivity extends Activity implements SavableActivity {
                 adapter.setBeamPushUris(null, this);
         }
 
+        createHomeDirectories();
+
 
         try {
             // Setup our framework
@@ -327,8 +342,7 @@ public class EmulationActivity extends Activity implements SavableActivity {
             filters = new IntentFilter[] {new IntentFilter(NfcAdapter.ACTION_TECH_DISCOVERED)};
             techLists = new String[][] { { TECH_ISO_PCDA} };
 
-            publishMessage("Desfire emulator ready", Color.WHITE);
-            publishMessage("Waiting for nfc initiate", Color.WHITE);
+            publishMessage("emulator ready..", R.color.light_green);
 
             // Force intent
             Intent intent = getIntent();

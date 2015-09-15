@@ -17,7 +17,7 @@ import java.io.IOException;
  */
 public class ActivityUtil {
 
-    public static final String HOME_DIR = "/DesfireHce";
+    public static final String HOME_DIR = "/desfire-emulator";
 
     private static final String LOG_TAG = ActivityUtil.class.getSimpleName();
 

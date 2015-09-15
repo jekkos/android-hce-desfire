@@ -26,7 +26,7 @@
             android:gravity="left|top" android:lines="20" android:padding="8dp"
             android:singleLine="false" android:textColorHighlight="@color/orange" android:textColorHint="@color/red"
             android:textSize="16sp" android:typeface="normal"
-            android:backgroundTint="@color/dark_gray"/>
+            android:backgroundTint="@color/dark_gray" android:background="#ff000000"/>
     </ScrollView>
 
 </RelativeLayout>

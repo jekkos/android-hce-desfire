@@ -36,6 +36,7 @@ public class DesfireCryptoTest extends AbstractAppletTest {
         {
             ByteBuffer rndA = CommandApdus.parseBytes("74 B2 5E EC AC 78 DE DB 35 3C EC A7 AD 44 4C 20");
             ByteBuffer rndB = CommandApdus.parseBytes("6B A4 28 79 EC 04 7A 88 CF 51 95 62 45 DF 31 A6");
+
             Key generatedSessionKey = DesfireKey.AES.buildSessionKey(rndA.array(), rndB.array());
             ByteBuffer sessionKey = CommandApdus.parseBytes("74 B2 5E EC 6B A4 28 79 AD 44 4C 20 45 DF 31 A6");
             assertTrue(Arrays.equals(generatedSessionKey.getEncoded(), sessionKey.array()));

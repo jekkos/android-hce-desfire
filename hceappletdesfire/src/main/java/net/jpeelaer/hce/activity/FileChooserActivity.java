@@ -117,8 +117,7 @@ public class FileChooserActivity extends Activity {
     private boolean mCreateFileEnabled = false;
     private boolean mDeleteFileEnabled = false;
 
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
+    @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_file_chooser);
         mGroupOfFiles = (RadioGroup) findViewById(R.id.radioGroupFileChooser);
