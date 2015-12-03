@@ -50,6 +50,9 @@ public class DesfireApplet extends Applet {
      * Current session key
      */
     Key sessionKey;
+    /**
+     * random number to authenticate using private key
+     */
     byte[] randomNumberToAuthenticate;
     /**
      * File selected
@@ -58,7 +61,7 @@ public class DesfireApplet extends Applet {
     /**
      * Directory file selected
      */
-    private DirectoryFile selectedDF;
+    private DirectoryFile selectedDirectoryFile;
     /**
      * Sets wich command has to continue after a CONTINUE command
      */
@@ -102,7 +105,7 @@ public class DesfireApplet extends Applet {
      */
     public DesfireApplet() throws NoSuchPaddingException, NoSuchAlgorithmException {
         masterFile = new MasterFile();
-        selectedDF = masterFile;
+        selectedDirectoryFile = masterFile;
         commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
         offset = 0;
         bytesLeft = 0;
@@ -131,8 +134,8 @@ public class DesfireApplet extends Applet {
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != 1) IsoException.throwIt(Util.LENGTH_ERROR);
             // RndB is generated			
             keyNumberToAuthenticate = buffer[Iso7816.OFFSET_CDATA];
-            if (!selectedDF.isValidKeyNumber(keyNumberToAuthenticate)) IsoException.throwIt(Util.NO_SUCH_KEY);
-            DesfireKey keyType = selectedDF.getKeyType();
+            if (!selectedDirectoryFile.isValidKeyNumber(keyNumberToAuthenticate)) IsoException.throwIt(Util.NO_SUCH_KEY);
+            DesfireKey keyType = selectedDirectoryFile.getKeyType();
             int randomBlockSize = keyType.randomBlockSize();
             randomNumberToAuthenticate = new byte[randomBlockSize];
             SecureRandom sr = new SecureRandom();
@@ -147,7 +150,7 @@ public class DesfireApplet extends Applet {
             //Ek(RndB) is sent
             return sendResponse(apdu, buffer, ekRndB, (byte) 0xAF);
         } else {
-            DesfireKey keyType = selectedDF.getKeyType();
+            DesfireKey keyType = selectedDirectoryFile.getKeyType();
             int randomBlockSize = keyType.randomBlockSize();
             //SECCOND MESSAGE
             if ((byte) (buffer[Iso7816.OFFSET_LC]) != randomBlockSize * 2) IsoException.throwIt(Util.LENGTH_ERROR);
@@ -188,16 +191,16 @@ public class DesfireApplet extends Applet {
     }
 
     private Cipher cipherForSelectedFile(int opMode) throws InvalidAlgorithmParameterException, InvalidKeyException {
-        DesfireKey keyType = selectedDF.getKeyType();
+        DesfireKey keyType = selectedDirectoryFile.getKeyType();
         byte[] ivBytes = new byte[keyType.blockSize()];
         java.util.Arrays.fill(ivBytes, (byte) 0);
         return cipherForSelectedFile(opMode, ivBytes);
     }
 
     private Cipher cipherForSelectedFile(int opMode,  byte[] ivBytes) throws InvalidKeyException, InvalidAlgorithmParameterException {
-        Key key = selectedDF.getParent().getMasterKey();
-        if (!selectedDF.isMasterFile()) {
-            key = selectedDF.getKey(keyNumberToAuthenticate);
+        Key key = selectedDirectoryFile.getParent().getMasterKey();
+        if (!selectedDirectoryFile.isMasterFile()) {
+            key = selectedDirectoryFile.getKey(keyNumberToAuthenticate);
         }
         Cipher cipher = deriveCipherFromKey(key);
         IvParameterSpec ivParameterSpec = new IvParameterSpec(ivBytes);
@@ -232,13 +235,13 @@ public class DesfireApplet extends Applet {
         if (((byte) (buffer[Iso7816.OFFSET_LC]) != 8) && ((byte) (buffer[Iso7816.OFFSET_LC]) != 16))
             IsoException.throwIt(Util.LENGTH_ERROR);
         byte keySettings = buffer[Iso7816.OFFSET_CDATA];
-        if (!selectedDF.hasKeySettingsChangeAllowed(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
-        if (selectedDF.getFileID() == (byte) 0x00) {
+        if (!selectedDirectoryFile.hasKeySettingsChangeAllowed(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.getFileID() == (byte) 0x00) {
             masterFile.changeKeySettings(keySettings);
-            selectedDF = masterFile;
+            selectedDirectoryFile = masterFile;
         } else {
-            selectedDF.changeKeySettings(keySettings);
-            masterFile.arrayDF[selectedDF.getFileID()] = selectedDF;//Actualizamos
+            selectedDirectoryFile.changeKeySettings(keySettings);
+            masterFile.setDirectoryFile(selectedDirectoryFile.getFileID(), selectedDirectoryFile);
         }
         IsoException.throwIt(Util.OPERATION_OK);
     }
@@ -259,9 +262,9 @@ public class DesfireApplet extends Applet {
         if (((byte) (buffer[Iso7816.OFFSET_LC]) < 25) && ((byte) (buffer[Iso7816.OFFSET_LC]) > 41))
             IsoException.throwIt(Util.LENGTH_ERROR);
         byte keyN = buffer[Iso7816.OFFSET_CDATA];
-        if ((selectedDF.isMasterFile() == true) && (keyN != 0)) IsoException.throwIt(Util.PARAMETER_ERROR);
-        if ((selectedDF.isMasterFile() == false) && (keyN >= 28)) IsoException.throwIt(Util.PARAMETER_ERROR);
-        if (selectedDF.hasChangeAccess(authenticated, keyN) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if ((selectedDirectoryFile.isMasterFile() == true) && (keyN != 0)) IsoException.throwIt(Util.PARAMETER_ERROR);
+        if ((selectedDirectoryFile.isMasterFile() == false) && (keyN >= 28)) IsoException.throwIt(Util.PARAMETER_ERROR);
+        if (selectedDirectoryFile.hasChangeAccess(authenticated, keyN) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         byte[] encipheredKeyData = new byte[(byte) (buffer[Iso7816.OFFSET_LC] - 1)];
         for (byte i = 0; i < encipheredKeyData.length; i++) {
@@ -271,14 +274,14 @@ public class DesfireApplet extends Applet {
         byte[] newKeyDecrypted = decryptEncipheredKeyData(encipheredKeyData, keyN);
 
 
-        if (selectedDF.isMasterFile()) {
+        if (selectedDirectoryFile.isMasterFile()) {
             if (authenticated == keyN) authenticated = Util.NO_KEY_AUTHENTICATED;
             masterFile.changeKey(keyN, newKeyDecrypted);
-            selectedDF = masterFile;
+            selectedDirectoryFile = masterFile;
         } else {
             if (authenticated == keyN) authenticated = Util.NO_KEY_AUTHENTICATED;
-            selectedDF.changeKey(keyN, newKeyDecrypted);
-            masterFile.arrayDF[selectedDF.getFileID()] = selectedDF;
+            selectedDirectoryFile.changeKey(keyN, newKeyDecrypted);
+            masterFile.setDirectoryFile(selectedDirectoryFile.getFileID(), selectedDirectoryFile);
         }
         IsoException.throwIt(Util.OPERATION_OK);
     }
@@ -324,9 +327,9 @@ public class DesfireApplet extends Applet {
         if (masterFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         //If the application that is going to be removed is the currently selected the PICC level is set
-        if (selectedDF.getFileID() == masterFile.searchAID(AID)) selectedDF = masterFile;
+        if (selectedDirectoryFile.getFileID() == masterFile.searchAID(AID)) selectedDirectoryFile = masterFile;
         masterFile.deleteDF(AID);
-        if (selectedDF.isMasterFile()) selectedDF = masterFile;
+        if (selectedDirectoryFile.isMasterFile()) selectedDirectoryFile = masterFile;
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -382,9 +385,9 @@ public class DesfireApplet extends Applet {
     private ResponseApdu getKeySettings(Apdu Apdu, byte[] buffer) {
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
-        if (!selectedDF.hasGetRights(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
-        byte ks = selectedDF.getKeySettings();
-        byte kn = selectedDF.getKeyNumber();
+        if (!selectedDirectoryFile.hasGetRights(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
+        byte ks = selectedDirectoryFile.getKeySettings();
+        byte kn = selectedDirectoryFile.getKeyNumber();
         byte[] response = new byte[2];
         response[0] = ks;
         response[1] = kn;
@@ -402,10 +405,10 @@ public class DesfireApplet extends Applet {
         //AID
         byte[] AID = {buffer[Iso7816.OFFSET_CDATA], buffer[Iso7816.OFFSET_CDATA + 1], buffer[Iso7816.OFFSET_CDATA + 2]};
         if (Arrays.areEqual(AID, Util.masterFileAID)) {
-            selectedDF = masterFile;
+            selectedDirectoryFile = masterFile;
         } else {
             byte i = masterFile.searchAID(AID);
-            if (i != (byte) -1) selectedDF = masterFile.arrayDF[masterFile.searchAID(AID)];
+            if (i != (byte) -1) selectedDirectoryFile = masterFile.getDirectoryFile(masterFile.searchAID(AID));
             else IsoException.throwIt(Util.APPLICATION_NOT_FOUND);
         }
         authenticated = Util.NO_KEY_AUTHENTICATED;
@@ -421,7 +424,7 @@ public class DesfireApplet extends Applet {
      * The PICC Master Keyand the PICC Master Key settings keep their currently set values
      */
     private void formatPICC(Apdu Apdu, byte[] buffer) {
-        if (!selectedDF.isMasterFile()) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (!selectedDirectoryFile.isMasterFile()) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
         if (!masterFile.isFormatEnabled()) IsoException.throwIt(Util.PERMISSION_DENIED);
@@ -440,7 +443,7 @@ public class DesfireApplet extends Applet {
      * @note || Option | ciphered( data || CRC )||
      */
     private void setConfiguration(Apdu Apdu, byte[] buffer) {
-        if ((selectedDF.isMasterFile() != true) || (this.authenticated != 0))
+        if ((selectedDirectoryFile.isMasterFile() != true) || (this.authenticated != 0))
             IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_LC] < 9) && ((byte) buffer[Iso7816.OFFSET_LC] > 33))
@@ -479,16 +482,16 @@ public class DesfireApplet extends Applet {
      * Returns the File Identifiers of all active files within the currently selected application
      */
     private ResponseApdu getFileIDs(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
-        if (selectedDF.hasGetRights(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
-        byte[] IDs = new byte[selectedDF.getNumberFiles() + 1];
+        if (selectedDirectoryFile.hasGetRights(authenticated)) IsoException.throwIt(Util.PERMISSION_DENIED);
+        byte[] IDs = new byte[selectedDirectoryFile.getNumberFiles() + 1];
         byte mark = 0;
         for (byte i = 0; i < (byte) (IDs.length - 1); i++) {
             for (byte j = mark; j < 32; j++) {
-                if (selectedDF.activatedFiles[j] == true) {
-                    selectedFile = selectedDF.getFile(j);
+                if (selectedDirectoryFile.activatedFiles[j] == true) {
+                    selectedFile = selectedDirectoryFile.getFile(j);
                     selectedFile.getFileID();
                     IDs[i] = selectedFile.getFileID();
                     mark = (byte) (j + 1);
@@ -511,14 +514,14 @@ public class DesfireApplet extends Applet {
      * 1				2                     1                  2           3
      */
     private void createStdDataFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_LC] != 7) && ((byte) buffer[Iso7816.OFFSET_LC] != 9))
             IsoException.throwIt(Util.LENGTH_ERROR);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
 
         byte communicationSettings;
         byte[] accessPermissions;
@@ -536,9 +539,13 @@ public class DesfireApplet extends Applet {
 
         short sizeS = Util.byteArrayToShort(size);
         //if(sizeS>(short)JCSystem.getAvailableMemory(JCSystem.MEMORY_TYPE_PERSISTENT))IsoException.throwIt(Util.OUT_OF_EEPROM_ERROR);
-        selectedFile = new StandartFile(fileID, masterFile.arrayDF[selectedDF.getFileID()], communicationSettings, accessPermissions, sizeS);
-        selectedDF = masterFile.arrayDF[selectedDF.getFileID()];
+        selectedFile = new StandartFile(fileID, getSelectedDirectoryFile(), communicationSettings, accessPermissions, sizeS);
+        selectedDirectoryFile = getSelectedDirectoryFile();
         IsoException.throwIt(Util.OPERATION_OK);
+    }
+
+    private DirectoryFile getSelectedDirectoryFile() {
+        return masterFile.getDirectoryFile(selectedDirectoryFile.getFileID());
     }
 
     /**
@@ -553,14 +560,14 @@ public class DesfireApplet extends Applet {
      * 1				2                     1                  2           3
      */
     private void createBackupDataFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_LC] != 7) && ((byte) buffer[Iso7816.OFFSET_LC] != 9))
             IsoException.throwIt(Util.LENGTH_ERROR);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
 
         byte communicationSettings;
         byte[] accessPermissions;
@@ -578,8 +585,8 @@ public class DesfireApplet extends Applet {
 
         short sizeS = Util.byteArrayToShort(size);
         //if(sizeS>(short)JCSystem.getAvailableMemory(JCSystem.MEMORY_TYPE_PERSISTENT))IsoException.throwIt(Util.OUT_OF_EEPROM_ERROR);
-        selectedFile = new BackupFile(fileID, masterFile.arrayDF[selectedDF.getFileID()], communicationSettings, accessPermissions, sizeS);
-        selectedDF = masterFile.arrayDF[selectedDF.getFileID()];
+        selectedFile = new BackupFile(fileID, getSelectedDirectoryFile(), communicationSettings, accessPermissions, sizeS);
+        selectedDirectoryFile = getSelectedDirectoryFile();
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -591,11 +598,11 @@ public class DesfireApplet extends Applet {
      * 1                1                 2             4               4             4                  1
      */
     private void createValueFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 17) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
         byte communicationSettings = (byte) buffer[Iso7816.OFFSET_CDATA + 1];
         byte[] accessPermissions = {(byte) buffer[Iso7816.OFFSET_CDATA + 3], (byte) buffer[Iso7816.OFFSET_CDATA + 2]};
         Value lowerLimit = new Value(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 7], (byte) buffer[Iso7816.OFFSET_CDATA + 6], (byte) buffer[Iso7816.OFFSET_CDATA + 5], (byte) buffer[Iso7816.OFFSET_CDATA + 4]});
@@ -606,9 +613,9 @@ public class DesfireApplet extends Applet {
         if (value.compareTo(lowerLimit) != 1) IsoException.throwIt(Util.BOUNDARY_ERROR);
         byte limitedCreditEnabled = (byte) buffer[Iso7816.OFFSET_CDATA + 16];
         //if((short)(30)>(short)JCSystem.getAvailableMemory(JCSystem.MEMORY_TYPE_PERSISTENT))IsoException.throwIt(Util.OUT_OF_EEPROM_ERROR);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
-        selectedFile = new ValueRecord(fileID, masterFile.arrayDF[selectedDF.getFileID()], communicationSettings, accessPermissions, lowerLimit, upperLimit, value, limitedCreditEnabled);
-        selectedDF = masterFile.arrayDF[selectedDF.getFileID()];
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        selectedFile = new ValueRecord(fileID, getSelectedDirectoryFile(), communicationSettings, accessPermissions, lowerLimit, upperLimit, value, limitedCreditEnabled);
+        selectedDirectoryFile = getSelectedDirectoryFile();
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -623,13 +630,13 @@ public class DesfireApplet extends Applet {
      * @note The MSB in the 3 bits values is not readed.
      */
     private void createLinearRecordFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_LC] != 10) && ((byte) buffer[Iso7816.OFFSET_LC] != 12))
             IsoException.throwIt(Util.LENGTH_ERROR);
 
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
         byte communicationSettings = 0;
         byte[] accessPermissions = new byte[2];
         short recordSize = 0;
@@ -647,9 +654,9 @@ public class DesfireApplet extends Applet {
         }
 
         //if((short)(recordSize*maxRecordNum)>(short)JCSystem.getAvailableMemory(JCSystem.MEMORY_TYPE_PERSISTENT))IsoException.throwIt(Util.OUT_OF_EEPROM_ERROR);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
-        selectedFile = new LinearRecord(fileID, masterFile.arrayDF[selectedDF.getFileID()], communicationSettings, accessPermissions, recordSize, maxRecordNum);
-        selectedDF = masterFile.arrayDF[selectedDF.getFileID()];
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        selectedFile = new LinearRecord(fileID, getSelectedDirectoryFile(), communicationSettings, accessPermissions, recordSize, maxRecordNum);
+        selectedDirectoryFile = getSelectedDirectoryFile();
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -663,12 +670,12 @@ public class DesfireApplet extends Applet {
      * @note The MSB in the 3 bits values is not readed.
      */
     private void createCyclicRecordFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_LC] != 10) && ((byte) buffer[Iso7816.OFFSET_LC] != 12))
             IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == true) IsoException.throwIt(Util.DUPLICATE_ERROR);
         byte communicationSettings = 0;
         byte[] accessPermissions = new byte[2];
         short recordSize = 0;
@@ -685,9 +692,9 @@ public class DesfireApplet extends Applet {
             maxRecordNum = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 10], (byte) buffer[Iso7816.OFFSET_CDATA + 9]});
         }
         //if((short)(recordSize*maxRecordNum)>(short)JCSystem.getAvailableMemory(JCSystem.MEMORY_TYPE_PERSISTENT))IsoException.throwIt(Util.OUT_OF_EEPROM_ERROR);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
-        selectedFile = new CyclicRecord(fileID, masterFile.arrayDF[selectedDF.getFileID()], communicationSettings, accessPermissions, recordSize, maxRecordNum);
-        selectedDF = masterFile.arrayDF[selectedDF.getFileID()];
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        selectedFile = new CyclicRecord(fileID, getSelectedDirectoryFile(), communicationSettings, accessPermissions, recordSize, maxRecordNum);
+        selectedDirectoryFile = getSelectedDirectoryFile();
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -699,14 +706,14 @@ public class DesfireApplet extends Applet {
      * 1
      */
     private void deleteFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 1) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-        if (selectedDF.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
-        selectedDF.deleteFile(fileID);
-        masterFile.arrayDF[selectedDF.getFileID()] = selectedDF;
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        if (selectedDirectoryFile.hasManageRights(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
+        selectedDirectoryFile.deleteFile(fileID);
+        masterFile.setDirectoryFile(selectedDirectoryFile.getFileID(), selectedDirectoryFile);
         IsoException.throwIt(Util.OPERATION_OK);
     }
 
@@ -721,15 +728,15 @@ public class DesfireApplet extends Applet {
 //	 *                 1           3        3 	
 //	 */
 //	private void readData(Apdu Apdu, byte[] buffer){
-//		if(selectedDF.isMasterFile()==true)IsoException.throwIt(Util.PERMISSION_DENIED);
+//		if(selectedDirectoryFile.isMasterFile()==true)IsoException.throwIt(Util.PERMISSION_DENIED);
 //		
 //		byte[] out;
 //		if(((byte)buffer[Iso7816.OFFSET_INS]==Util.READ_DATA)&&((byte)buffer[Iso7816.OFFSET_LC]!=7))IsoException.throwIt(Util.LENGTH_ERROR);
 //		if(((byte)buffer[Iso7816.OFFSET_INS]==Util.CONTINUE)&&((byte)buffer[Iso7816.OFFSET_LC]!=0))IsoException.throwIt(Util.LENGTH_ERROR);
 //		if(commandToContinue==Util.NO_COMMAND_TO_CONTINUE){
 //			byte fileID=buffer[Iso7816.OFFSET_CDATA];
-//			if(selectedDF.isValidFileNumber(fileID)==false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-//			selectedFile=(StandartFile) selectedDF.getFile(fileID);
+//			if(selectedDirectoryFile.isValidFileNumber(fileID)==false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+//			selectedFile=(StandartFile) selectedDirectoryFile.getFile(fileID);
 //			if(((StandartFile)selectedFile).hasReadAccess(authenticated)==false){
 //				IsoException.throwIt(Util.PERMISSION_DENIED);
 //			}
@@ -764,14 +771,14 @@ public class DesfireApplet extends Applet {
      * 1           3        3
      */
     private ResponseApdu readData(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.READ_DATA.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] != 7))
             IsoException.throwIt(Util.LENGTH_ERROR);
         //Get parameters
         byte fileID = buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-        selectedFile = (StandartFile) selectedDF.getFile(fileID);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        selectedFile = (StandartFile) selectedDirectoryFile.getFile(fileID);
         if (((StandartFile) selectedFile).hasReadAccess(authenticated) == false)
             IsoException.throwIt(Util.PERMISSION_DENIED);
         offset = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]});
@@ -797,7 +804,7 @@ public class DesfireApplet extends Applet {
 //	 *                 1        3        3     1-52
 //	 */
 //	private void writeData(Apdu Apdu, byte[] buffer){
-//		if(selectedDF.isMasterFile()==true)IsoException.throwIt(Util.PERMISSION_DENIED);
+//		if(selectedDirectoryFile.isMasterFile()==true)IsoException.throwIt(Util.PERMISSION_DENIED);
 //		
 //		if(((byte)buffer[Iso7816.OFFSET_INS]==Util.WRITE_DATA)&&((byte)buffer[Iso7816.OFFSET_LC]<8))IsoException.throwIt(Util.LENGTH_ERROR);
 //		if(((byte)buffer[Iso7816.OFFSET_INS]==Util.CONTINUE)&&((byte)buffer[Iso7816.OFFSET_LC]!=0))IsoException.throwIt(Util.LENGTH_ERROR);
@@ -805,8 +812,8 @@ public class DesfireApplet extends Applet {
 //		byte[] data;
 //		if(commandToContinue==Util.NO_COMMAND_TO_CONTINUE){
 //			byte fileID=buffer[Iso7816.OFFSET_CDATA];
-//			if(selectedDF.isValidFileNumber(fileID)==false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-//			selectedFile=(StandartFile) selectedDF.getFile(fileID);
+//			if(selectedDirectoryFile.isValidFileNumber(fileID)==false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+//			selectedFile=(StandartFile) selectedDirectoryFile.getFile(fileID);
 //			if(((StandartFile)selectedFile).hasWriteAccess(authenticated)==false)IsoException.throwIt(Util.PERMISSION_DENIED);
 //			offset=Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA+2],(byte) buffer[Iso7816.OFFSET_CDATA+1]});	
 //			bytesLeft=Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA+5],(byte) buffer[Iso7816.OFFSET_CDATA+4]});
@@ -853,7 +860,7 @@ public class DesfireApplet extends Applet {
      * 1        3        3     1-52
      */
     private void writeData(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.WRITE_DATA.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
             IsoException.throwIt(Util.LENGTH_ERROR);
@@ -863,8 +870,8 @@ public class DesfireApplet extends Applet {
         if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             //Get parameters
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
-            if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-            selectedFile = selectedDF.getFile(fileID);
+            if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+            selectedFile = selectedDirectoryFile.getFile(fileID);
             if (selectedFile.hasWriteAccess(authenticated) == false) IsoException.throwIt(Util.PERMISSION_DENIED);
 
             offset = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]});
@@ -924,12 +931,12 @@ public class DesfireApplet extends Applet {
      * 1
      */
     private ResponseApdu getValue(Apdu Apdu, byte[] buffer) throws InvalidKeyException, ShortBufferException, IllegalBlockSizeException, BadPaddingException {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 1) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-        selectedFile = (ValueRecord) selectedDF.getFile(fileID);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        selectedFile = (ValueRecord) selectedDirectoryFile.getFile(fileID);
         if (((ValueRecord) selectedFile).hasReadAccess(authenticated) != true)
             IsoException.throwIt(Util.PERMISSION_DENIED);
         byte[] response = Util.switchBytes((((ValueRecord) selectedFile).getValue().getValue()));
@@ -944,12 +951,12 @@ public class DesfireApplet extends Applet {
      */
 
     private void credit(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 5) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-        selectedFile = (ValueRecord) selectedDF.getFile(fileID);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        selectedFile = (ValueRecord) selectedDirectoryFile.getFile(fileID);
         if (((ValueRecord) selectedFile).hasWriteAccess(authenticated) == false)
             IsoException.throwIt(Util.PERMISSION_DENIED);
         ((ValueRecord) selectedFile).addCredit(new Value(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 4], (byte) buffer[Iso7816.OFFSET_CDATA + 3], (byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]}));
@@ -962,12 +969,12 @@ public class DesfireApplet extends Applet {
      * @note ||	FileN | Data  ||
      */
     private void debit(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 5) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = (byte) buffer[Iso7816.OFFSET_CDATA];
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-        selectedFile = (ValueRecord) selectedDF.getFile(fileID);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        selectedFile = (ValueRecord) selectedDirectoryFile.getFile(fileID);
         if (((ValueRecord) selectedFile).hasWriteAccess(authenticated) == false)
             IsoException.throwIt(Util.PERMISSION_DENIED);
         ((ValueRecord) selectedFile).decDebit(new Value(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 4], (byte) buffer[Iso7816.OFFSET_CDATA + 3], (byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]}));
@@ -989,7 +996,7 @@ public class DesfireApplet extends Applet {
     //ECHARLE UN VISTAZO A ESTO
     //FALTA
     private void writeRecord(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if (((byte) buffer[Iso7816.OFFSET_INS] == DesFireInstruction.WRITE_RECORD.toByte()) && ((byte) buffer[Iso7816.OFFSET_LC] < 8))
             IsoException.throwIt(Util.LENGTH_ERROR);
@@ -999,8 +1006,8 @@ public class DesfireApplet extends Applet {
         if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
 
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
-            selectedFile = selectedDF.getFile(fileID);
-            if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+            selectedFile = selectedDirectoryFile.getFile(fileID);
+            if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
             offset = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]});
             bytesLeft = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 5], (byte) buffer[Iso7816.OFFSET_CDATA + 4]});
             byte length = (byte) (buffer[Iso7816.OFFSET_LC] - 7);
@@ -1009,12 +1016,12 @@ public class DesfireApplet extends Applet {
                 dataBuffer[i] = buffer[(byte) (Iso7816.OFFSET_CDATA + i + 7)];
             }
             if (selectedFile instanceof LinearRecord) {
-                selectedFile = (LinearRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+                selectedFile = (LinearRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
                 if (((LinearRecord) selectedFile).hasWriteAccess(authenticated) == false) {
                     IsoException.throwIt(Util.PERMISSION_DENIED);
                 }
             } else if (selectedFile instanceof CyclicRecord) {
-                selectedFile = (CyclicRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+                selectedFile = (CyclicRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
                 if (((CyclicRecord) selectedFile).hasWriteAccess(authenticated) == false) {
                     IsoException.throwIt(Util.PERMISSION_DENIED);
                 }
@@ -1069,18 +1076,18 @@ public class DesfireApplet extends Applet {
 
     //USAR LOS NUEVOS METODOS IMPLEMENTADOS PARA REALIZARLO DE UNA MANERA M�S ELEGANTE
     private ResponseApdu readRecords(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 7) IsoException.throwIt(Util.LENGTH_ERROR);
         byte[] out = null;
         if (commandToContinue == DesFireInstruction.NO_COMMAND_TO_CONTINUE) {
             byte fileID = buffer[Iso7816.OFFSET_CDATA];
-            if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
-            selectedFile = selectedDF.getFile(fileID);
+            if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+            selectedFile = selectedDirectoryFile.getFile(fileID);
             offset = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 2], (byte) buffer[Iso7816.OFFSET_CDATA + 1]});
             short length = Util.byteArrayToShort(new byte[]{(byte) buffer[Iso7816.OFFSET_CDATA + 5], (byte) buffer[Iso7816.OFFSET_CDATA + 4]});
             if (selectedFile instanceof LinearRecord) {
-                selectedFile = (LinearRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+                selectedFile = (LinearRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
                 if (((LinearRecord) selectedFile).hasReadAccess(authenticated) == false) {
                     IsoException.throwIt(Util.PERMISSION_DENIED);
                 }
@@ -1100,7 +1107,7 @@ public class DesfireApplet extends Applet {
                 }
             }
             if (selectedFile instanceof CyclicRecord) {
-                selectedFile = (CyclicRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+                selectedFile = (CyclicRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
                 if (((CyclicRecord) selectedFile).hasReadAccess(authenticated) == false) {
                     IsoException.throwIt(Util.PERMISSION_DENIED);
                 }
@@ -1165,15 +1172,15 @@ public class DesfireApplet extends Applet {
      * 1
      */
     private void clearRecordFile(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 1) IsoException.throwIt(Util.LENGTH_ERROR);
         byte fileID = buffer[Iso7816.OFFSET_CDATA];
-        selectedFile = selectedDF.getFile(fileID);
-        if (selectedDF.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
+        selectedFile = selectedDirectoryFile.getFile(fileID);
+        if (selectedDirectoryFile.isValidFileNumber(fileID) == false) IsoException.throwIt(Util.FILE_NOT_FOUND);
 
         if (selectedFile instanceof LinearRecord) {
-            selectedFile = (LinearRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+            selectedFile = (LinearRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
             if (((LinearRecord) selectedFile).hasWriteAccess(authenticated) == false) {
                 IsoException.throwIt(Util.PERMISSION_DENIED);
             }
@@ -1181,7 +1188,7 @@ public class DesfireApplet extends Applet {
             IsoException.throwIt(Util.OPERATION_OK);
         }
         if (selectedFile instanceof CyclicRecord) {
-            selectedFile = (CyclicRecord) selectedDF.getFile(buffer[Iso7816.OFFSET_CDATA]);
+            selectedFile = (CyclicRecord) selectedDirectoryFile.getFile(buffer[Iso7816.OFFSET_CDATA]);
             if (((CyclicRecord) selectedFile).hasWriteAccess(authenticated) == false) {
                 IsoException.throwIt(Util.PERMISSION_DENIED);
             }
@@ -1195,32 +1202,32 @@ public class DesfireApplet extends Applet {
      * Record Files within one application
      */
     private void commitTransaction(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
         for (byte i = 0; i < 32; i++) {
-            if (selectedDF.getWaitingForTransaction(i) == true) {
-                if (selectedDF.getFile(i) instanceof BackupFile) {
-                    selectedFile = (BackupFile) selectedDF.getFile(i);
+            if (selectedDirectoryFile.getWaitingForTransaction(i) == true) {
+                if (selectedDirectoryFile.getFile(i) instanceof BackupFile) {
+                    selectedFile = (BackupFile) selectedDirectoryFile.getFile(i);
                     if (((BackupFile) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((BackupFile) selectedFile).commitTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof LinearRecord) {
-                    selectedFile = (LinearRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof LinearRecord) {
+                    selectedFile = (LinearRecord) selectedDirectoryFile.getFile(i);
                     if (((LinearRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((LinearRecord) selectedFile).commitTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof CyclicRecord) {
-                    selectedFile = (CyclicRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof CyclicRecord) {
+                    selectedFile = (CyclicRecord) selectedDirectoryFile.getFile(i);
                     if (((CyclicRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((CyclicRecord) selectedFile).commitTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof ValueRecord) {
-                    selectedFile = (ValueRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof ValueRecord) {
+                    selectedFile = (ValueRecord) selectedDirectoryFile.getFile(i);
                     if (((ValueRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((ValueRecord) selectedFile).commitTransaction();
@@ -1235,31 +1242,31 @@ public class DesfireApplet extends Applet {
      * Record Files within one application
      */
     private void abortTransaction(Apdu Apdu, byte[] buffer) {
-        if (selectedDF.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
+        if (selectedDirectoryFile.isMasterFile() == true) IsoException.throwIt(Util.PERMISSION_DENIED);
 
         if ((byte) buffer[Iso7816.OFFSET_LC] != 0) IsoException.throwIt(Util.LENGTH_ERROR);
         for (byte i = 0; i < 32; i++) {
-            if (selectedDF.getWaitingForTransaction(i) == true) {
-                if (selectedDF.getFile(i) instanceof BackupFile) {
-                    selectedFile = (BackupFile) selectedDF.getFile(i);
+            if (selectedDirectoryFile.getWaitingForTransaction(i) == true) {
+                if (selectedDirectoryFile.getFile(i) instanceof BackupFile) {
+                    selectedFile = (BackupFile) selectedDirectoryFile.getFile(i);
                     if (((BackupFile) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((BackupFile) selectedFile).abortTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof LinearRecord) {
-                    selectedFile = (LinearRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof LinearRecord) {
+                    selectedFile = (LinearRecord) selectedDirectoryFile.getFile(i);
                     if (((LinearRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((LinearRecord) selectedFile).abortTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof CyclicRecord) {
-                    selectedFile = (CyclicRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof CyclicRecord) {
+                    selectedFile = (CyclicRecord) selectedDirectoryFile.getFile(i);
                     if (((CyclicRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((CyclicRecord) selectedFile).abortTransaction();
                 }
-                if (selectedDF.getFile(i) instanceof ValueRecord) {
-                    selectedFile = (ValueRecord) selectedDF.getFile(i);
+                if (selectedDirectoryFile.getFile(i) instanceof ValueRecord) {
+                    selectedFile = (ValueRecord) selectedDirectoryFile.getFile(i);
                     if (((ValueRecord) selectedFile).hasWriteAccess(authenticated) == false)
                         IsoException.throwIt(Util.PERMISSION_DENIED);
                     ((ValueRecord) selectedFile).abortTransaction();
@@ -1437,7 +1444,7 @@ public class DesfireApplet extends Applet {
      */
     private void clear() {
         selectedFile = null;
-        selectedDF = masterFile;
+        selectedDirectoryFile = masterFile;
         commandToContinue = DesFireInstruction.NO_COMMAND_TO_CONTINUE;
         authenticated = Util.NO_KEY_AUTHENTICATED;
         dataBuffer = null;
@@ -1503,9 +1510,9 @@ public class DesfireApplet extends Applet {
             //The new key is obtained
             byte[] oldKey = new byte[16];
             try {
-                oldKey = selectedDF.getKey(keyN).getEncoded();
+                oldKey = selectedDirectoryFile.getKey(keyN).getEncoded();
                 // FIXME is this correct??
-                //((DESKey)selectedDF.getKey(keyN)).getKey(oldKey, (short)0);
+                //((DESKey)selectedDirectoryFile.getKey(keyN)).getKey(oldKey, (short)0);
             } catch (IsoException e) {
                 oldKey = Util.getZeroArray((short) 16);
             }

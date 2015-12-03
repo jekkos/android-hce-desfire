@@ -17,13 +17,13 @@ public class HceFramework
 	private volatile AppletThread appletThread;
 
 	public HceFramework() {
-		activeApplet = null;
-		applets = new HashMap<ByteBuffer, Applet>();
+		this(null);
 	}
 
 	public HceFramework(PropertyChangeListener propertyChangeListener)
 	{
-		this();
+		activeApplet = null;
+		applets = new HashMap<ByteBuffer, Applet>();
 		appletThread = new AppletThread(propertyChangeListener);
 	}
 	

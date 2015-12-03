@@ -3,6 +3,10 @@ package net.jpeelaer.hce.desfire;
 import org.kevinvalk.hce.framework.IsoException;
 
 import java.security.Key;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 //El Directory File equivale a la aplicaci�n. 
 
@@ -12,8 +16,8 @@ public class DirectoryFile extends File {
     private static final byte MAX_FILES = 32;
     public boolean[] activatedFiles = new boolean[32];
     private boolean[] waitingForTransaction = new boolean[32];
-    private File[] arrayFiles = new File[MAX_FILES];
-    private Key[] keyList;
+    private Map<Integer, File> arrayFiles = new HashMap<>(MAX_FILES);
+    private List<Key> keyList;
     private byte numberFiles = 0;
     private Key masterKey;
     private DesfireKey keyType;
@@ -60,8 +64,8 @@ public class DirectoryFile extends File {
         maxKeyNumber = keySettings[1] & 0x0F;
         ISOFileIDSupported = (keySettings[1] & (byte) 0x10) == (byte) 0x10;
 
-        keyList = new Key[maxKeyNumber];
-        keyList[0] = keyType.buildDefaultKey();
+        keyList = new ArrayList<Key>(maxKeyNumber);
+        keyList.add(keyType.buildDefaultKey());
     }
 
     public void setAID(byte[] AID) { }
@@ -72,7 +76,7 @@ public class DirectoryFile extends File {
 
     public File getFile(byte fid) {
         if (activatedFiles[fid] == true) {
-            return (arrayFiles[fid]);
+            return arrayFiles.get(fid);
         }  else {
             IsoException.throwIt((short) Util.FILE_NOT_FOUND);//File not found
             return null;
@@ -89,14 +93,14 @@ public class DirectoryFile extends File {
     }
 
     public void updateFile(File update, byte fileID) {
-        arrayFiles[fileID] = update;
+        arrayFiles.put(Integer.valueOf(fileID), update);
     }
 
     public void addFile(File s) {
         if (activatedFiles[s.getFileID()] == true) {
-            IsoException.throwIt(Util.DUPLICATE_ERROR);//Duplicate File
+            IsoException.throwIt(Util.DUPLICATE_ERROR);//Deruplicate File
         }
-        arrayFiles[s.getFileID()] = s;
+        arrayFiles.put(Integer.valueOf(s.getFileID()), s);
         numberFiles++;
         activatedFiles[s.getFileID()] = true;
 
@@ -105,14 +109,14 @@ public class DirectoryFile extends File {
     public void deleteFile(byte id) {
 
         activatedFiles[id] = false;
-        arrayFiles[id] = null;
+        arrayFiles.remove(id);
         numberFiles--;
     }
 
     public Key getKey(byte keyNumber) {
         if (keyNumber >= maxKeyNumber) IsoException.throwIt(Util.NO_SUCH_KEY);//No Such Key
-        else if (keyList[keyNumber] == null) IsoException.throwIt(Util.NO_SUCH_KEY);//No Such Key
-        return (keyList[keyNumber]);
+        else if (keyList.get(keyNumber) == null) IsoException.throwIt(Util.NO_SUCH_KEY);//No Such Key
+        return (keyList.get(keyNumber));
     }
 
     public DesfireKey getKeyType() {
@@ -132,7 +136,7 @@ public class DirectoryFile extends File {
             masterKey = newKey;
         } else {//It's not MasterFile
             Key newKey = keyType.buildKey(keyBytes);
-            keyList[keyNumber] = newKey;
+            keyList.set(Integer.valueOf(keyNumber), newKey);
         }
     }
 
@@ -242,7 +246,7 @@ public class DirectoryFile extends File {
     public boolean isValidKeyNumber(byte keyNumber) {
 
         if (keyNumber >= maxKeyNumber) return false;//No Such Key
-        else if (keyList[keyNumber] == null) return false;//No Such Key
+        else if (keyList.get(keyNumber) == null) return false;//No Such Key
         return true;
     }
 

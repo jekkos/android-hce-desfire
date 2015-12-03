@@ -23,7 +23,7 @@ public class SaveRestoreSessionTest extends AbstractAppletTest {
 
         Assert.assertTrue(restoredDump instanceof MasterFile);
         MasterFile masterFile = (MasterFile) restoredDump;
-        Assert.assertTrue(masterFile.arrayDF.length == 1);
+        Assert.assertTrue(masterFile.numberOfFiles() == 1);
 
     }
 

@@ -18,8 +18,17 @@ import java.util.Arrays;
  */
 public class AbstractAppletTest {
 
-    @Spy
     protected DesfireApplet applet;
+
+    {
+        try {
+            applet = new DesfireApplet();
+        } catch (NoSuchPaddingException e) {
+            e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+    }
 
     protected void createApplication (byte keyType) {
         // create directory

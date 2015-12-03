@@ -1,0 +1,6 @@
+I/AppletThread(28626): -> 5A 40 83 F4
+I/AppletThread(28626): <- 6D 00   
+
+E/EmulationActivity(27008): Caused by: java.io.IOException                       
+E/EmulationActivity(27008):     at android.nfc.tech.BasicTagTechnology.connect(BasicTagTechnology.java:85)
+E/EmulationActivity(27008):     at android.nfc.tech.IsoPcdA.connect(IsoPcdA.java:41) 

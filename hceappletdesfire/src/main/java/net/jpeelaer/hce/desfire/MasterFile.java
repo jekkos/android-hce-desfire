@@ -4,6 +4,11 @@ package net.jpeelaer.hce.desfire;
 import org.kevinvalk.hce.framework.IsoException;
 import org.spongycastle.util.Arrays;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 
 public class MasterFile extends DirectoryFile {
     private static final byte MF_FID = 0x00;
@@ -30,7 +35,7 @@ public class MasterFile extends DirectoryFile {
     /**
      * Pointers to the different applications
      */
-    DirectoryFile[] arrayDF;
+    Map<Integer, DirectoryFile> directoryFiles;
 
     /**
      * Default key to wich all new keys will be initialized
@@ -45,7 +50,7 @@ public class MasterFile extends DirectoryFile {
         indexDF = new IndexFile((byte) 0x00, this, (short) 3, (short) 28);
         byte[] AID = {(byte) 0xF4, (byte) 0x01, (byte) 0x10};
         indexDF.writeRecord((short) 0, AID);
-        arrayDF = new DirectoryFile[28];
+        directoryFiles = new HashMap<>(28);
         defaultKeyBytes = DesfireKey.TDES.defaultKey();
     }
 
@@ -58,18 +63,30 @@ public class MasterFile extends DirectoryFile {
         if (searchAID(AID) != (byte) -1) IsoException.throwIt(Util.DUPLICATE_ERROR);//AID repetida
         if (numApp == 27) IsoException.throwIt((short) 0x91CE);//Num App excede las 28
         indexDF.writeRecord(numApp, AID);
-        arrayDF[numApp] = new DirectoryFile(numApp, keySettings, this);
+        directoryFiles.put(Integer.valueOf(numApp), new DirectoryFile(numApp, keySettings, this));
         numApp++;
         return (byte) (numApp - 1);
     }
 
     public void deleteDF(byte[] AID) {
         byte ID = searchAID(AID);
-        arrayDF[ID] = null;
+        directoryFiles.remove(Integer.valueOf(ID));
         numApp--;
         //Borrar DF del record
         //FALTA
         indexDF.deleteRecord(ID);
+    }
+
+    public void setDirectoryFile(int index, DirectoryFile directoryFile) {
+        directoryFiles.put(index, directoryFile);
+    }
+
+    public DirectoryFile getDirectoryFile(int index) {
+        return directoryFiles.get(index);
+    }
+
+    public int numberOfFiles() {
+        return directoryFiles.size();
     }
 
     /**
@@ -133,8 +150,8 @@ public class MasterFile extends DirectoryFile {
      * Releases the user memory
      */
     public void format() {
-        for (byte i = 0; i < arrayDF.length; i++) {
-            if (arrayDF[i] != null) {
+        for (byte i = 0; i < directoryFiles.size(); i++) {
+            if (directoryFiles.get(Integer.valueOf(i)) != null) {
                 deleteDF(getAID(i));
             }
         }
