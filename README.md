@@ -1,0 +1,29 @@
+
+
+Project Inception
+-----------------
+
+This project is an incomplete software implementation of the Mifare Desfire protocol for HCE on Android.
+The app has to be used with the original HCE patch of Doug Yeager introduced in CyanogenMod 9. Most of the
+initial code has now been removed from CyanogenMod and thus a system level patch is needed to make the whole work.
+
+* App will only work on phones with PN544 NXP chip (which are HTC One M7, Nexus S, ..)
+* A patched NFC.apk will need to be built from the packages_Nfc_apps repository I cloned here on github
+* libnfc-nxp should contain the needed fixes in CM12
+* Binary versions can be delivered upon request
+
+Project state
+-------------
+
+The code contains some testcases that verify a couple of different basic communication scenario's with a DesFire card. 
+Doug Yeager's patch was ported to Android 5 which enabled a pn544 to communicate with off the shelve NFC physical security system at Capgemini Belgium's premises.
+A presentation was given at Capgemini Belgium to present the POC.
+
+References
+----------
+
+This project is based on the following work
+
+* [Kevin Valk's thesis](https://github.com/kevinvalk/android-hce-framework) on HCE in Android and his work on porting JavaCard applets to the Android platform
+* Original code from an academic paper on [porting DesFire to JavaCard](code.google.com/p/java-card-desfire-emulation). This code contains an implementation for the legacy protocols only (non AES)
+* Libfreefare code which contains all the newer DesFire protocol implementation details.
