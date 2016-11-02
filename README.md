@@ -8,7 +8,8 @@ The app has to be used with the original HCE patch of Doug Yeager introduced in 
 initial code has now been removed from CyanogenMod and thus a system level patch is needed to make the whole work.
 
 * App will only work on phones with PN544 NXP chip (which are HTC One M7, Nexus S, ..)
-* A patched NFC.apk will need to be built from the packages_Nfc_apps repository I cloned here on github
+* A patched NFC.apk will need to be built from the [packages_Nfc_apps repository](https://github.com/jekkos/android_packages_apps_Nfc) I cloned here on github
+* A patched Android framework.jar should be built the [android base framework](https://github.com/jekkos/android_frameworks_base)
 * libnfc-nxp should contain the needed fixes in CM12 (no changes required)
 
 Project state
