@@ -19,7 +19,19 @@ The code contains some testcases that verify a couple of different basic communi
 Doug Yeager's patch was ported to Android 5 which enabled a pn544 to communicate with off the shelve NFC physical security system at Capgemini Belgium's premises.
 [A talk was given at Capgemini Belgium](https://github.com/jekkos/android-hce-desfire/blob/master/talk/Android%20internals%20-%20Nfc%20stack%20explorations.pptx?raw=true) in 2015 to present the POC.
 
-You can detect a phone as a Mifare Tag by using an libnfc compqatible reader with [patched libfreefare](https://github.com/jekkos/libfreefare). One working example here includes the mifare get info command, which can request some general info fields from the Android application and show them in a linux terminal. To reproduce this case it's best to use the `pn532-tamashell` binary that comes by default with libfreefare. In that case the raw command bytes for DesFire get info can be issued whcih should normally yield a valid response from the Android app.
+You can detect a phone as a Mifare Tag by using an libnfc compqatible reader with [patched libfreefare](https://github.com/jekkos/libfreefare). One working example here includes the mifare get info command, which can request some general info fields from the Android application and show them in a linux terminal. To reproduce this case it's best to use the `pn532-tamashell` binary that comes by default with libfreefare. 
+
+In that case the raw command bytes for DesFire get info can be issued which should normally yield a valid response from the Android app.
+
+```
+LIBNFC_LOG_LEVEL=3 cat << EOF | pn53x-tamashell \
+4a 01 00 \
+40 01 00 a4 04 00 07 d2 76 00 00 85 01 00 00  \
+40 01 00 00 60 00 00 00 \
+40 01 00 00 AF 00 00 00 \
+40 01 00 00 AF 00 00 00 \
+EOF
+```
 
 References
 ----------
