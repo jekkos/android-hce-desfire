@@ -9,15 +9,14 @@ initial code has now been removed from CyanogenMod and thus a system level patch
 
 * App will only work on phones with PN544 NXP chip (which are HTC One M7, Nexus S, ..)
 * A patched NFC.apk will need to be built from the packages_Nfc_apps repository I cloned here on github
-* libnfc-nxp should contain the needed fixes in CM12
-* Binary versions can be delivered upon request
+* libnfc-nxp should contain the needed fixes in CM12 (no changes required)
 
 Project state
 -------------
 
 The code contains some testcases that verify a couple of different basic communication scenario's with a DesFire card. 
 Doug Yeager's patch was ported to Android 5 which enabled a pn544 to communicate with off the shelve NFC physical security system at Capgemini Belgium's premises.
-A presentation was given at Capgemini Belgium to present the POC.
+[A talk was given at Capgemini Belgium](https://github.com/jekkos/android-hce-desfire/blob/master/talk/Android%20internals%20-%20Nfc%20stack%20explorations.pptx?raw=true) in 2015 to present the POC.
 
 References
 ----------
